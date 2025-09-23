@@ -82,22 +82,22 @@ const MainScreen: React.FC = () => {
 
         <View style={styles.headerCenter}>
           <TouchableOpacity style={[styles.controlButton, styles.rewindButton]}>
-            <Text style={styles.controlIcon}>⏪</Text>
+            <Text style={styles.controlIcon}>⏮</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.playButton, isPlaying && styles.playButtonActive]} onPress={handlePlayPause}>
-            <Text style={styles.playIcon}>{isPlaying ? '⏸️' : '▶️'}</Text>
+            <Text style={styles.playIcon}>{isPlaying ? '⏸' : '▶'}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.controlButton, styles.stopButton]}>
-            <Text style={styles.controlIcon}>⏹️</Text>
+            <Text style={styles.controlIcon}>⏹</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.controlButton, styles.forwardButton]}>
-            <Text style={styles.controlIcon}>⏩</Text>
+            <Text style={styles.controlIcon}>⏭</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.controlButton, styles.loopButton]}>
-            <Text style={styles.controlIcon}>🔄</Text>
+            <Text style={styles.controlIcon}>⟲</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.controlButton, styles.shuffleButton]}>
-            <Text style={styles.controlIcon}>🔁</Text>
+            <Text style={styles.controlIcon}>⇄</Text>
           </TouchableOpacity>
         </View>
 
@@ -122,125 +122,33 @@ const MainScreen: React.FC = () => {
       <View style={styles.mainContent}>
         {/* Tracks Section */}
         <View style={styles.tracksSection}>
-          {/* Advanced Display Section */}
-          <View style={styles.advancedDisplaySection}>
-            <View style={styles.advancedDisplay}>
-              {/* Header */}
-              <View style={styles.displayHeader}>
-                <View style={styles.headerLeft}>
-                  <Text style={styles.headerText}>MIXERCURSE ANALYZER</Text>
-                  <Text style={styles.subHeaderText}>MONITOR 20.C / {currentTime}</Text>
-                </View>
-                <View style={styles.headerRight}>
-                  <Text style={styles.headerValue}>00.00</Text>
-                  <Text style={styles.headerLabel}>11000</Text>
-                </View>
-              </View>
-
-              {/* Main Graph Section */}
-              <View style={styles.graphSection}>
-                <View style={styles.graphContainer}>
-                  <Text style={styles.graphLabel}>FREQ RESPONSE</Text>
-                  <View style={styles.graphArea}>
-                    {/* Simulated waveform lines */}
-                    <View style={styles.waveformLine} />
-                    <View style={[styles.waveformLine, styles.waveformLine2]} />
-                    <View style={[styles.waveformLine, styles.waveformLine3]} />
-                  </View>
-                  <View style={styles.graphControls}>
-                    <TouchableOpacity style={styles.graphButton}>
-                      <Text style={styles.graphButtonText}>200</Text>
-                    </TouchableOpacity>
-                    <Text style={styles.graphPercentage}>130%</Text>
+          {/* Simple Display Section */}
+          <View style={styles.simpleDisplaySection}>
+            <View style={styles.simpleDisplay}>
+              {/* Song Info */}
+              <View style={styles.songInfoSection}>
+                <View style={styles.albumArtContainer}>
+                  <View style={styles.albumArt}>
+                    <Text style={styles.albumArtText}>🎵</Text>
                   </View>
                 </View>
-
-                <View style={styles.controlSection}>
-                  <View style={styles.controlRow}>
-                    <Text style={styles.controlValue}>-306</Text>
-                    <TouchableOpacity style={styles.playButton} onPress={handlePlayPause}>
-                      <Text style={styles.playIcon}>{isPlaying ? '⏸️' : '▶️'}</Text>
-                    </TouchableOpacity>
-                    <Text style={styles.controlText}>AUDIO PROCESSING</Text>
-                  </View>
-                  
-                  <View style={styles.buttonRow}>
-                    <TouchableOpacity style={styles.controlBtn}>
-                      <Text style={styles.controlBtnText}>MIT</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.controlBtn}>
-                      <Text style={styles.controlBtnText}>PM</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.controlBtn}>
-                      <Text style={styles.controlBtnText}>NO</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.controlBtn}>
-                      <Text style={styles.controlBtnText}>HM</Text>
-                    </TouchableOpacity>
-                    <Text style={styles.controlLabel}>BOAMAIT</Text>
-                  </View>
+                <View style={styles.songDetails}>
+                  <Text style={styles.songTitle}>Praise</Text>
+                  <Text style={styles.songArtist}>Elevation Worship</Text>
+                  <Text style={styles.songBpm}>{bpm} BPM</Text>
                 </View>
               </View>
 
-              {/* Bottom Graph Section */}
-              <View style={styles.bottomGraphSection}>
-                <View style={styles.bottomGraph}>
-                  <Text style={styles.bottomGraphLabel}>SPECTRUM ANALYZER</Text>
-                  <View style={styles.spectrumArea}>
-                    <View style={[styles.spectrumBar, { height: '60%' }]} />
-                    <View style={[styles.spectrumBar, { height: '80%' }]} />
-                    <View style={[styles.spectrumBar, { height: '40%' }]} />
-                    <View style={[styles.spectrumBar, { height: '90%' }]} />
-                    <View style={[styles.spectrumBar, { height: '70%' }]} />
-                    <View style={[styles.spectrumBar, { height: '50%' }]} />
-                    <View style={[styles.spectrumBar, { height: '85%' }]} />
-                    <View style={[styles.spectrumBar, { height: '30%' }]} />
-                  </View>
-                  <Text style={styles.spectrumLabel}>DECAME 10</Text>
+              {/* Progress Bar */}
+              <View style={styles.progressSection}>
+                <View style={styles.progressBar}>
+                  <View style={[styles.progressFill, { width: '50%' }]} />
+                  <View style={styles.progressThumb} />
                 </View>
-
-                <View style={styles.sliderSection}>
-                  <View style={styles.sliderContainer}>
-                    <View style={styles.sliderTrack}>
-                      <View style={[styles.sliderThumb, { top: '30%' }]} />
-                    </View>
-                    <Text style={styles.sliderLabel}>GAIN</Text>
-                  </View>
-                  <View style={styles.sliderContainer}>
-                    <View style={styles.sliderTrack}>
-                      <View style={[styles.sliderThumb, { top: '60%' }]} />
-                    </View>
-                    <Text style={styles.sliderLabel}>EQ</Text>
-                  </View>
-                  <View style={styles.sliderContainer}>
-                    <View style={styles.sliderTrack}>
-                      <View style={[styles.sliderThumb, { top: '40%' }]} />
-                    </View>
-                    <Text style={styles.sliderLabel}>COMP</Text>
-                  </View>
+                <View style={styles.timeInfo}>
+                  <Text style={styles.timeText}>{currentTime}</Text>
+                  <Text style={styles.timeText}>{totalTime}</Text>
                 </View>
-              </View>
-
-              {/* Bottom Control Bar */}
-              <View style={styles.bottomControlBar}>
-                <TouchableOpacity style={styles.bottomButton}>
-                  <Text style={styles.bottomButtonText}>SMOY</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.bottomButton}>
-                  <Text style={styles.bottomButtonText}>NOATIANT</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.bottomButton}>
-                  <Text style={styles.bottomButtonText}>AETAICO</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.bottomButton}>
-                  <Text style={styles.bottomButtonText}>Pinch</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.bottomButton}>
-                  <Text style={styles.bottomButtonText}>Sepe</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.bottomButton}>
-                  <Text style={styles.bottomButtonText}>Muser</Text>
-                </TouchableOpacity>
               </View>
             </View>
           </View>
@@ -438,52 +346,62 @@ const styles = StyleSheet.create({
     marginHorizontal: 6,
     width: 40,
     height: 40,
-    backgroundColor: '#555',
-    borderRadius: 6,
+    backgroundColor: '#E8E8E8',
+    borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#777',
+    borderWidth: 1,
+    borderColor: '#F5F5F5',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
-    // Efecto metálico
-    borderTopColor: '#888',
-    borderLeftColor: '#888',
-    borderRightColor: '#333',
-    borderBottomColor: '#333',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    elevation: 5,
+    // Efecto metal pulido aluminio
+    borderTopColor: '#FFFFFF',
+    borderLeftColor: '#FFFFFF',
+    borderRightColor: '#C0C0C0',
+    borderBottomColor: '#C0C0C0',
+    // Gradiente simulado con múltiples bordes
+    borderTopWidth: 2,
+    borderLeftWidth: 2,
+    borderRightWidth: 1,
+    borderBottomWidth: 1,
   },
   playButton: {
     marginHorizontal: 8,
     width: 50,
     height: 50,
-    backgroundColor: '#555',
-    borderRadius: 6,
+    backgroundColor: '#E8E8E8',
+    borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
+    borderWidth: 1,
     borderColor: '#4CAF50',
     shadowColor: '#4CAF50',
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 8,
-    elevation: 4,
-    // Efecto metálico
-    borderTopColor: '#66ff66',
-    borderLeftColor: '#66ff66',
-    borderRightColor: '#2a7a2a',
-    borderBottomColor: '#2a7a2a',
+    shadowOpacity: 0.9,
+    shadowRadius: 12,
+    elevation: 6,
+    // Efecto metal pulido aluminio con LED verde
+    borderTopColor: '#FFFFFF',
+    borderLeftColor: '#FFFFFF',
+    borderRightColor: '#C0C0C0',
+    borderBottomColor: '#C0C0C0',
+    // Gradiente simulado con múltiples bordes
+    borderTopWidth: 2,
+    borderLeftWidth: 2,
+    borderRightWidth: 1,
+    borderBottomWidth: 1,
   },
   controlIcon: {
     fontSize: 16,
-    color: '#fff',
+    color: '#333',
     fontWeight: 'bold',
   },
   playIcon: {
     fontSize: 20,
-    color: '#fff',
+    color: '#333',
     fontWeight: 'bold',
   },
   headerRight: {
@@ -525,74 +443,164 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#fff',
   },
-  // LED Button Styles
+  // LED Button Styles - Metal pulido con LED
   playButtonActive: {
     borderColor: '#00ff00',
-    borderTopColor: '#66ff66',
-    borderLeftColor: '#66ff66',
-    borderRightColor: '#00aa00',
-    borderBottomColor: '#00aa00',
+    borderTopColor: '#FFFFFF',
+    borderLeftColor: '#FFFFFF',
+    borderRightColor: '#C0C0C0',
+    borderBottomColor: '#C0C0C0',
     shadowColor: '#00ff00',
     shadowOpacity: 1,
     shadowRadius: 15,
+    backgroundColor: '#F0F8F0',
   },
   stopButton: {
     borderColor: '#ff0000',
-    borderTopColor: '#ff6666',
-    borderLeftColor: '#ff6666',
-    borderRightColor: '#aa0000',
-    borderBottomColor: '#aa0000',
+    borderTopColor: '#FFFFFF',
+    borderLeftColor: '#FFFFFF',
+    borderRightColor: '#C0C0C0',
+    borderBottomColor: '#C0C0C0',
     shadowColor: '#ff0000',
     shadowOpacity: 0.8,
     shadowRadius: 10,
+    backgroundColor: '#F8F0F0',
   },
   rewindButton: {
     borderColor: '#ff8800',
-    borderTopColor: '#ffaa44',
-    borderLeftColor: '#ffaa44',
-    borderRightColor: '#cc6600',
-    borderBottomColor: '#cc6600',
+    borderTopColor: '#FFFFFF',
+    borderLeftColor: '#FFFFFF',
+    borderRightColor: '#C0C0C0',
+    borderBottomColor: '#C0C0C0',
     shadowColor: '#ff8800',
     shadowOpacity: 0.7,
     shadowRadius: 8,
+    backgroundColor: '#F8F4F0',
   },
   forwardButton: {
     borderColor: '#ff8800',
-    borderTopColor: '#ffaa44',
-    borderLeftColor: '#ffaa44',
-    borderRightColor: '#cc6600',
-    borderBottomColor: '#cc6600',
+    borderTopColor: '#FFFFFF',
+    borderLeftColor: '#FFFFFF',
+    borderRightColor: '#C0C0C0',
+    borderBottomColor: '#C0C0C0',
     shadowColor: '#ff8800',
     shadowOpacity: 0.7,
     shadowRadius: 8,
+    backgroundColor: '#F8F4F0',
   },
   loopButton: {
     borderColor: '#0088ff',
-    borderTopColor: '#44aaff',
-    borderLeftColor: '#44aaff',
-    borderRightColor: '#0066cc',
-    borderBottomColor: '#0066cc',
+    borderTopColor: '#FFFFFF',
+    borderLeftColor: '#FFFFFF',
+    borderRightColor: '#C0C0C0',
+    borderBottomColor: '#C0C0C0',
     shadowColor: '#0088ff',
     shadowOpacity: 0.7,
     shadowRadius: 8,
+    backgroundColor: '#F0F4F8',
   },
   shuffleButton: {
     borderColor: '#8800ff',
-    borderTopColor: '#aa44ff',
-    borderLeftColor: '#aa44ff',
-    borderRightColor: '#6600cc',
-    borderBottomColor: '#6600cc',
+    borderTopColor: '#FFFFFF',
+    borderLeftColor: '#FFFFFF',
+    borderRightColor: '#C0C0C0',
+    borderBottomColor: '#C0C0C0',
     shadowColor: '#8800ff',
     shadowOpacity: 0.7,
     shadowRadius: 8,
+    backgroundColor: '#F4F0F8',
   },
-  advancedDisplaySection: {
+  simpleDisplaySection: {
     backgroundColor: '#0a0a0a',
-    padding: 12,
+    padding: 15,
     marginBottom: 15,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#333',
+  },
+  simpleDisplay: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 6,
+    padding: 15,
+    borderWidth: 1,
+    borderColor: '#444',
+  },
+  songInfoSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  albumArtContainer: {
+    marginRight: 15,
+  },
+  albumArt: {
+    width: 60,
+    height: 60,
+    backgroundColor: '#333',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#555',
+  },
+  albumArtText: {
+    fontSize: 24,
+    color: '#888',
+  },
+  songDetails: {
+    flex: 1,
+  },
+  songTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  songArtist: {
+    color: '#888',
+    fontSize: 14,
+    marginBottom: 4,
+  },
+  songBpm: {
+    color: '#00aaff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  progressSection: {
+    marginTop: 10,
+  },
+  progressBar: {
+    height: 6,
+    backgroundColor: '#333',
+    borderRadius: 3,
+    position: 'relative',
+    marginBottom: 8,
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#00aaff',
+    borderRadius: 3,
+  },
+  progressThumb: {
+    position: 'absolute',
+    width: 12,
+    height: 12,
+    backgroundColor: '#fff',
+    borderRadius: 6,
+    top: -3,
+    left: '50%',
+    transform: [{ translateX: -6 }],
+    borderWidth: 2,
+    borderColor: '#00aaff',
+  },
+  timeInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  timeText: {
+    color: '#888',
+    fontSize: 12,
+    fontFamily: 'monospace',
   },
   advancedDisplay: {
     backgroundColor: '#1a1a1a',

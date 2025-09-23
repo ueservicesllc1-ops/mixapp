@@ -16,7 +16,8 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useAuth } from '../components/AuthProvider';
-// import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import auth from '@react-native-firebase/auth';
 
 const LoginScreen: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -26,11 +27,11 @@ const LoginScreen: React.FC = () => {
   const { signIn, signUp, signOut } = useAuth();
 
   // Configure Google Sign-In
-  // React.useEffect(() => {
-  //   GoogleSignin.configure({
-  //     webClientId: 'YOUR_WEB_CLIENT_ID', // You'll need to get this from Firebase Console
-  //   });
-  // }, []);
+  React.useEffect(() => {
+    GoogleSignin.configure({
+      webClientId: 'YOUR_WEB_CLIENT_ID', // You'll need to get this from Firebase Console
+    });
+  }, []);
 
   const handleEmailAuth = async () => {
     if (!email || !password) {
@@ -55,32 +56,31 @@ const LoginScreen: React.FC = () => {
   };
 
   const handleGoogleSignIn = async () => {
-    Alert.alert('Info', 'Google Sign-In temporalmente deshabilitado');
-    // setIsLoading(true);
-    // try {
-    //   // Check if your device supports Google Play
-    //   await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
-      
-    //   // Get the users ID token
-    //   const { idToken } = await GoogleSignin.signIn();
+    setIsLoading(true);
+    try {
+      // Check if your device supports Google Play
+      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
 
-    //   // Create a Google credential with the token
-    //   const googleCredential = auth.GoogleAuthProvider.credential(idToken);
+      // Get the users ID token
+      const { idToken } = await GoogleSignin.signIn();
 
-    //   // Sign-in the user with the credential
-    //   await auth().signInWithCredential(googleCredential);
-    //   Alert.alert('Éxito', 'Inicio de sesión con Google exitoso');
-    // } catch (error: any) {
-    //   Alert.alert('Error', error.message);
-    // } finally {
-    //   setIsLoading(false);
-    // }
+      // Create a Google credential with the token
+      const googleCredential = auth.GoogleAuthProvider.credential(idToken);
+
+      // Sign-in the user with the credential
+      await auth().signInWithCredential(googleCredential);
+      Alert.alert('Éxito', 'Inicio de sesión con Google exitoso');
+    } catch (error: any) {
+      Alert.alert('Error', error.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleSignOut = async () => {
     try {
       await signOut();
-      // await GoogleSignin.signOut();
+      await GoogleSignin.signOut();
       Alert.alert('Éxito', 'Sesión cerrada');
     } catch (error: any) {
       Alert.alert('Error', error.message);

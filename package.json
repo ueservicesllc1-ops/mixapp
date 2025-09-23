@@ -19,7 +19,7 @@
     "react-native-fs": "^2.20.0",
     "react-native-safe-area-context": "^5.5.2",
     "react-native-sound": "^0.12.0",
-    "_react-native-track-player": "^4.1.2"
+    "@react-native-google-signin/google-signin": "^13.0.1"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

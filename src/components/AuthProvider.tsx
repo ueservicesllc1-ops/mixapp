@@ -6,7 +6,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
-// import firestoreService from '../services/firestoreService';
+import firestoreService from '../services/firestoreService';
 
 interface AuthContextType {
   user: FirebaseAuthTypes.User | null;
@@ -36,13 +36,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   useEffect(() => {
     const unsubscribe = auth().onAuthStateChanged(async (user) => {
-      // if (user) {
-      //   // Check if user profile exists, if not create it
-      //   const userProfile = await firestoreService.getUserProfile(user.uid);
-      //   if (!userProfile) {
-      //     await firestoreService.createUserProfile(user);
-      //   }
-      // }
+      if (user) {
+        // Check if user profile exists, if not create it
+        const userProfile = await firestoreService.getUserProfile(user.uid);
+        if (!userProfile) {
+          await firestoreService.createUserProfile(user);
+        }
+      }
       setUser(user);
       setLoading(false);
     });
