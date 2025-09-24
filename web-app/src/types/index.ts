@@ -48,6 +48,7 @@ export interface Song {
   artist: string;
   key: string;
   bpm: number;
+  timeSignature?: string;
   audioFile?: string;
   order: number;
   duration?: number;

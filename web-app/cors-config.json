@@ -1,0 +1,25 @@
+[
+  {
+    "corsRuleName": "webapp-s3-upload",
+    "allowedOrigins": [
+      "http://localhost:3000",
+      "http://127.0.0.1:3000",
+      "https://localhost:3000"
+    ],
+    "allowedHeaders": [
+      "*",
+      "Content-Type",
+      "x-amz-acl",
+      "Authorization"
+    ],
+    "allowedOperations": [
+      "s3_put_object",
+      "s3_get_object"
+    ],
+    "exposeHeaders": [
+      "ETag",
+      "x-amz-version-id"
+    ],
+    "maxAgeSeconds": 3600
+  }
+]

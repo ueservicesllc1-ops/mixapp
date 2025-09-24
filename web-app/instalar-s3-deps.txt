@@ -1,0 +1,15 @@
+EJECUTA ESTOS COMANDOS EN POWERSHELL:
+
+1. Ve a la carpeta web-app:
+   cd web-app
+
+2. Instala las dependencias S3:
+   npm install @aws-sdk/client-s3
+
+3. Ejecuta el servidor S3:
+   node server-s3.js
+
+El servidor estará en: http://localhost:3001
+Endpoint de subida: http://localhost:3001/api/upload
+
+¡Ya está listo para subir archivos a B2 usando S3-Compatible API!

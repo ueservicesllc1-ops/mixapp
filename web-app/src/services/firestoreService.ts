@@ -90,28 +90,44 @@ class FirestoreService {
 
   // Setlist Operations
   async createSetlist(setlistData: Omit<Setlist, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
-    const setlist: Omit<Setlist, 'id'> = {
-      ...setlistData,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+    try {
+      console.log('Creating setlist with data:', setlistData);
+      const setlist: Omit<Setlist, 'id'> = {
+        ...setlistData,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
 
-    const docRef = await addDoc(collection(db, 'setlists'), setlist);
-    return docRef.id;
+      const docRef = await addDoc(collection(db, 'setlists'), setlist);
+      console.log('Setlist created with ID:', docRef.id);
+      return docRef.id;
+    } catch (error) {
+      console.error('Error creating setlist:', error);
+      throw error;
+    }
   }
 
   async getUserSetlists(ownerId: string): Promise<Setlist[]> {
-    const q = query(
-      collection(db, 'setlists'),
-      where('ownerId', '==', ownerId),
-      orderBy('updatedAt', 'desc')
-    );
-    
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-    })) as Setlist[];
+    try {
+      console.log('Getting setlists for user:', ownerId);
+      const q = query(
+        collection(db, 'setlists'),
+        where('ownerId', '==', ownerId),
+        orderBy('updatedAt', 'desc')
+      );
+      
+      const querySnapshot = await getDocs(q);
+      const setlists = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as Setlist[];
+      
+      console.log('Found setlists:', setlists);
+      return setlists;
+    } catch (error) {
+      console.error('Error getting user setlists:', error);
+      return [];
+    }
   }
 
   async updateSetlist(setlistId: string, updates: Partial<Setlist>): Promise<void> {
@@ -133,6 +149,22 @@ class FirestoreService {
     return docRef.id;
   }
 
+  // Add song to user's library (global songs collection)
+  async addSongToLibrary(userId: string, song: Omit<Song, 'id'>): Promise<string> {
+    try {
+      console.log('Adding song to library:', song);
+      const docRef = await addDoc(collection(db, 'songs'), {
+        ...song,
+        ownerId: userId
+      });
+      console.log('Song added to library with ID:', docRef.id);
+      return docRef.id;
+    } catch (error) {
+      console.error('Error adding song to library:', error);
+      throw error;
+    }
+  }
+
   async getSetlistSongs(setlistId: string): Promise<Song[]> {
     const q = query(
       collection(db, 'setlists', setlistId, 'songs'),
@@ -144,6 +176,30 @@ class FirestoreService {
       id: doc.id,
       ...doc.data(),
     })) as Song[];
+  }
+
+  // Get user's library songs
+  async getUserLibrary(userId: string): Promise<Song[]> {
+    try {
+      console.log('Getting user library for:', userId);
+      const q = query(
+        collection(db, 'songs'),
+        where('ownerId', '==', userId),
+        orderBy('uploadDate', 'desc')
+      );
+      
+      const querySnapshot = await getDocs(q);
+      const songs = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as Song[];
+      
+      console.log('Found library songs:', songs.length);
+      return songs;
+    } catch (error) {
+      console.error('Error getting user library:', error);
+      return [];
+    }
   }
 
   // Real-time listeners

@@ -15,6 +15,7 @@ import {
   Dimensions,
   Alert,
   Image,
+  Modal,
 } from 'react-native';
 import { useAuth } from '../components/AuthProvider';
 import firestoreService from '../services/firestoreService';
@@ -30,6 +31,7 @@ const MainScreen: React.FC = () => {
   const [bpm, setBpm] = useState(128);
   const [key, setKey] = useState('C');
   const [selectedTrack, setSelectedTrack] = useState(0);
+  const [showLibraryModal, setShowLibraryModal] = useState(false);
   
   // Hook de autenticación
   const { user, signOut } = useAuth();
@@ -60,35 +62,9 @@ const MainScreen: React.FC = () => {
     checkUserInFirestore();
   }, [user]);
 
-  const tracks = [
-    { name: 'Clicks', muted: true, solo: false, volume: 0 },
-    { name: 'Cues', muted: true, solo: false, volume: 0 },
-    { name: 'Drums 1', muted: false, solo: false, volume: 0.8 },
-    { name: 'Drums 2', muted: false, solo: false, volume: 0.6 },
-    { name: 'Warm pad', muted: false, solo: false, volume: 0.4 },
-    { name: 'Guitar 1', muted: false, solo: false, volume: 0.7 },
-    { name: 'Vocals 1', muted: false, solo: false, volume: 0.9 },
-    { name: 'Vocals 2', muted: false, solo: false, volume: 0.5 },
-    { name: 'Vocals 3', muted: false, solo: false, volume: 0.3 },
-    { name: 'Synthesizer 1', muted: false, solo: false, volume: 0.6 },
-    { name: 'Synthesizer 2', muted: false, solo: false, volume: 0.4 },
-    { name: 'Bass guitar 1', muted: false, solo: false, volume: 0.8 },
-    { name: 'Guitar 2', muted: false, solo: false, volume: 0.5 },
-    { name: 'Guitar 3', muted: false, solo: false, volume: 0.3 },
-    { name: 'Bass guitar 2', muted: false, solo: false, volume: 0.7 },
-    { name: 'Back vocals 1', muted: false, solo: false, volume: 0.4 },
-    { name: 'Violin 1', muted: false, solo: false, volume: 0.6 },
-    { name: 'Violin 2', muted: false, solo: false, volume: 0.3 },
-  ];
+  const tracks: Array<{ name: string; muted: boolean; solo: boolean; volume: number }> = [];
 
-  const setlistSongs = [
-    { id: 3, title: 'I speak Jesus', artist: 'Original version', key: 'E', bpm: 74 },
-    { id: 4, title: 'I Thank God', artist: 'Elevation Worship', key: 'A', bpm: 128 },
-    { id: 5, title: 'Praise', artist: 'Elevation Worship', key: 'Ab', bpm: 127, selected: true },
-    { id: 6, title: 'Song Title', artist: 'Artist', key: 'C', bpm: 120 },
-    { id: 7, title: 'Another Song', artist: 'Artist', key: 'B', bpm: 72 },
-    { id: 8, title: 'Final Song', artist: 'Artist', key: 'F', bpm: 102 },
-  ];
+  const setlistSongs: Array<{ id: number; title: string; artist: string; key: string; bpm: number; selected?: boolean }> = [];
 
   const musicalKeys = ['Db', 'Eb', 'Gb', 'Ab', 'Bb', 'B', 'C', 'D', 'E', 'F', 'G', 'A'];
 
@@ -341,7 +317,13 @@ const MainScreen: React.FC = () => {
           {/* Library Section */}
           <View style={styles.librarySection}>
             <View style={styles.libraryHeader}>
-              <Text style={styles.libraryTitle}>+ Library</Text>
+              <TouchableOpacity 
+                style={styles.libraryButton}
+                onPress={() => setShowLibraryModal(true)}
+              >
+                <Text style={styles.libraryButtonText}>📚</Text>
+                <Text style={styles.libraryButtonLabel}>Biblioteca</Text>
+              </TouchableOpacity>
               <TouchableOpacity style={styles.editButton}>
                 <Text style={styles.editButtonText}>Edit setlist</Text>
               </TouchableOpacity>
@@ -384,6 +366,72 @@ const MainScreen: React.FC = () => {
           </View>
         </View>
       </View>
+
+      {/* Modal de Biblioteca */}
+      <Modal
+        visible={showLibraryModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowLibraryModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.libraryModal}>
+            <View style={styles.libraryHeader}>
+              <Text style={styles.libraryModalTitle}>📚 Biblioteca de Audio</Text>
+              <TouchableOpacity 
+                style={styles.closeButton}
+                onPress={() => setShowLibraryModal(false)}
+              >
+                <Text style={styles.closeButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView style={styles.libraryContent}>
+              <View style={styles.librarySection}>
+                <Text style={styles.librarySectionTitle}>🎵 Canciones</Text>
+                <View style={styles.libraryItem}>
+                  <Text style={styles.libraryItemIcon}>🎶</Text>
+                  <View style={styles.libraryItemInfo}>
+                    <Text style={styles.libraryItemTitle}>Canción de Ejemplo</Text>
+                    <Text style={styles.libraryItemSubtitle}>Artista • 120 BPM • C Mayor</Text>
+                  </View>
+                  <TouchableOpacity style={styles.libraryItemButton}>
+                    <Text style={styles.libraryItemButtonText}>▶</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <View style={styles.librarySection}>
+                <Text style={styles.librarySectionTitle}>🎛️ Proyectos</Text>
+                <View style={styles.libraryItem}>
+                  <Text style={styles.libraryItemIcon}>🎚️</Text>
+                  <View style={styles.libraryItemInfo}>
+                    <Text style={styles.libraryItemTitle}>Proyecto Demo</Text>
+                    <Text style={styles.libraryItemSubtitle}>8 pistas • 128 BPM</Text>
+                  </View>
+                  <TouchableOpacity style={styles.libraryItemButton}>
+                    <Text style={styles.libraryItemButtonText}>📂</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <View style={styles.librarySection}>
+                <Text style={styles.librarySectionTitle}>🎼 Setlists</Text>
+                <View style={styles.libraryItem}>
+                  <Text style={styles.libraryItemIcon}>📋</Text>
+                  <View style={styles.libraryItemInfo}>
+                    <Text style={styles.libraryItemTitle}>Setlist Domingo</Text>
+                    <Text style={styles.libraryItemSubtitle}>5 canciones</Text>
+                  </View>
+                  <TouchableOpacity style={styles.libraryItemButton}>
+                    <Text style={styles.libraryItemButtonText}>📂</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -1312,6 +1360,115 @@ const styles = StyleSheet.create({
   },
   signOutIcon: {
     fontSize: 12,
+  },
+  // Estilos para el botón de biblioteca
+  libraryButton: {
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignItems: 'center',
+    flexDirection: 'row',
+    minWidth: 100,
+  },
+  libraryButtonText: {
+    fontSize: 16,
+    marginRight: 6,
+  },
+  libraryButtonLabel: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  // Estilos para el modal de biblioteca
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'flex-end',
+  },
+  libraryModal: {
+    backgroundColor: '#1a1a1a',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '80%',
+    minHeight: '60%',
+  },
+  libraryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
+  },
+  libraryModalTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  closeButton: {
+    backgroundColor: '#333',
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  libraryContent: {
+    flex: 1,
+    padding: 20,
+  },
+  librarySection: {
+    marginBottom: 25,
+  },
+  librarySectionTitle: {
+    color: '#4CAF50',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 15,
+  },
+  libraryItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2a2a2a',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 10,
+  },
+  libraryItemIcon: {
+    fontSize: 24,
+    marginRight: 15,
+  },
+  libraryItemInfo: {
+    flex: 1,
+  },
+  libraryItemTitle: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  libraryItemSubtitle: {
+    color: '#888',
+    fontSize: 12,
+  },
+  libraryItemButton: {
+    backgroundColor: '#4CAF50',
+    width: 35,
+    height: 35,
+    borderRadius: 17.5,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  libraryItemButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
 

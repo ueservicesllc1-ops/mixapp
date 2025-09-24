@@ -1,55 +1,34 @@
 /**
- * SongLibrary - Component for displaying uploaded songs
+ * SongLibrary - Component for displaying user's song library
  */
 
 import React, { useState, useEffect } from 'react';
-import { Music, Play, Pause, Download, Trash2, Edit3 } from 'lucide-react';
+import { Music, Play, Pause, Download, Trash2, Edit3, RefreshCw } from 'lucide-react';
 import firestoreService from '../services/firestoreService';
-import { Song, Setlist } from '../types';
+import { Song } from '../types';
 
 interface SongLibraryProps {
   userId: string;
 }
 
 const SongLibrary: React.FC<SongLibraryProps> = ({ userId }) => {
-  const [setlists, setSetlists] = useState<Setlist[]>([]);
-  const [selectedSetlist, setSelectedSetlist] = useState<string>('');
   const [songs, setSongs] = useState<Song[]>([]);
   const [loading, setLoading] = useState(true);
   const [playingSong, setPlayingSong] = useState<string | null>(null);
 
   useEffect(() => {
-    loadSetlists();
+    loadUserLibrary();
   }, [userId]);
 
-  useEffect(() => {
-    if (selectedSetlist) {
-      loadSongs(selectedSetlist);
-    }
-  }, [selectedSetlist]);
-
-  const loadSetlists = async () => {
+  const loadUserLibrary = async () => {
     try {
       setLoading(true);
-      const userSetlists = await firestoreService.getUserSetlists(userId);
-      setSetlists(userSetlists);
-      
-      if (userSetlists.length > 0 && !selectedSetlist) {
-        setSelectedSetlist(userSetlists[0].id);
-      }
+      const userSongs = await firestoreService.getUserLibrary(userId);
+      setSongs(userSongs);
     } catch (error) {
-      console.error('Error loading setlists:', error);
+      console.error('Error loading user library:', error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const loadSongs = async (setlistId: string) => {
-    try {
-      const setlistSongs = await firestoreService.getSetlistSongs(setlistId);
-      setSongs(setlistSongs);
-    } catch (error) {
-      console.error('Error loading songs:', error);
     }
   };
 
@@ -68,9 +47,7 @@ const SongLibrary: React.FC<SongLibraryProps> = ({ userId }) => {
         // await firestoreService.deleteSong(songId);
         console.log('Delete song:', songId);
         // Reload songs after deletion
-        if (selectedSetlist) {
-          loadSongs(selectedSetlist);
-        }
+        loadUserLibrary();
       } catch (error) {
         console.error('Error deleting song:', error);
       }
@@ -102,43 +79,36 @@ const SongLibrary: React.FC<SongLibraryProps> = ({ userId }) => {
 
   return (
     <div className="space-y-6">
-      {/* Setlist Selector */}
-      <div>
-        <label htmlFor="setlist" className="block text-sm font-medium text-dark-300 mb-2">
-          Seleccionar Setlist
-        </label>
-        <select
-          id="setlist"
-          value={selectedSetlist}
-          onChange={(e) => setSelectedSetlist(e.target.value)}
-          className="input-field w-full"
+      {/* Library Header */}
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-white flex items-center">
+          <Music className="h-5 w-5 mr-2" />
+          Mi Biblioteca ({songs.length} canciones)
+        </h3>
+        <button
+          onClick={loadUserLibrary}
+          disabled={loading}
+          className="bg-dark-600 hover:bg-dark-500 disabled:bg-dark-700 text-white px-3 py-2 rounded-lg flex items-center space-x-2 transition-colors"
         >
-          {setlists.map((setlist) => (
-            <option key={setlist.id} value={setlist.id}>
-              {setlist.name}
-            </option>
-          ))}
-        </select>
+          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          <span>Actualizar</span>
+        </button>
       </div>
 
-      {/* Songs List */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-white flex items-center">
-            <Music className="h-5 w-5 mr-2" />
-            Canciones ({songs.length})
-          </h3>
+      {loading ? (
+        <div className="text-center py-12">
+          <RefreshCw className="h-12 w-12 text-dark-600 mx-auto mb-4 animate-spin" />
+          <p className="text-dark-400">Cargando biblioteca...</p>
         </div>
-
-        {songs.length === 0 ? (
-          <div className="text-center py-12">
-            <Music className="h-12 w-12 text-dark-600 mx-auto mb-4" />
-            <p className="text-dark-400">No hay canciones en este setlist</p>
-            <p className="text-sm text-dark-500 mt-2">
-              Sube algunas canciones para comenzar
-            </p>
-          </div>
-        ) : (
+      ) : songs.length === 0 ? (
+        <div className="text-center py-12">
+          <Music className="h-12 w-12 text-dark-600 mx-auto mb-4" />
+          <p className="text-dark-400">Tu biblioteca está vacía</p>
+          <p className="text-sm text-dark-500 mt-2">
+            Sube algunas canciones para comenzar a crear tu biblioteca
+          </p>
+        </div>
+      ) : (
           <div className="space-y-2">
             {songs.map((song) => (
               <div key={song.id} className="card hover:bg-dark-700 transition-colors duration-200">
@@ -162,6 +132,7 @@ const SongLibrary: React.FC<SongLibraryProps> = ({ userId }) => {
                     <div className="flex items-center space-x-4 text-xs text-dark-500 mt-1">
                       <span>{song.bpm} BPM</span>
                       <span>Key: {song.key}</span>
+                      {song.timeSignature && <span>{song.timeSignature}</span>}
                       {song.duration && <span>{formatDuration(song.duration)}</span>}
                       {song.fileSize && <span>{formatFileSize(song.fileSize)}</span>}
                     </div>
@@ -192,7 +163,6 @@ const SongLibrary: React.FC<SongLibraryProps> = ({ userId }) => {
             ))}
           </div>
         )}
-      </div>
     </div>
   );
 };

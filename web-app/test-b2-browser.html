@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prueba de Conexión B2</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #1a1a1a;
+            color: white;
+        }
+        .container {
+            background-color: #2a2a2a;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #666;
+            cursor: not-allowed;
+        }
+        .log {
+            background-color: #1a1a1a;
+            border: 1px solid #444;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        .success { color: #4CAF50; }
+        .error { color: #f44336; }
+        .warning { color: #ff9800; }
+        .info { color: #2196F3; }
+        input[type="file"] {
+            margin: 10px 0;
+        }
+        .progress {
+            width: 100%;
+            background-color: #444;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .progress-bar {
+            height: 20px;
+            background-color: #4CAF50;
+            border-radius: 4px;
+            transition: width 0.3s;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Prueba de Conexión Backblaze B2</h1>
+        <p>Esta página te permite probar la conexión a B2 y la subida de archivos.</p>
+        
+        <button onclick="testAuth()">1. Probar Autenticación</button>
+        <button onclick="testUploadUrl()">2. Probar Upload URL</button>
+        <button onclick="testFileUpload()">3. Probar Subida de Archivo</button>
+        <button onclick="clearLog()">Limpiar Log</button>
+        
+        <input type="file" id="fileInput" accept="audio/*" />
+        
+        <div id="progress" class="progress" style="display: none;">
+            <div id="progressBar" class="progress-bar" style="width: 0%"></div>
+        </div>
+        
+        <div id="log" class="log"></div>
+    </div>
+
+    <script>
+        const B2_CONFIG = {
+            applicationKeyId: '005c2b526be0baa0000000011',
+            applicationKey: 'K005LMrcuASqx5cA35/nlvZg63lHeS4',
+            bucketId: 'cc12bbd592366bde909b0a1a',
+            bucketName: 'mixercur'
+        };
+
+        let authToken = null;
+        let uploadUrl = null;
+        let uploadAuthToken = null;
+
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type === 'success' ? 'success' : 
+                            type === 'error' ? 'error' : 
+                            type === 'warning' ? 'warning' : 'info';
+            logDiv.innerHTML += `<span class="${className}">[${timestamp}] ${message}</span>\n`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+
+        function showProgress(show) {
+            document.getElementById('progress').style.display = show ? 'block' : 'none';
+        }
+
+        function updateProgress(percent) {
+            document.getElementById('progressBar').style.width = percent + '%';
+        }
+
+        async function testAuth() {
+            log('🔍 Probando autenticación con B2...', 'info');
+            
+            try {
+                const response = await fetch('https://api.backblazeb2.com/b2api/v2/b2_authorize_account', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Basic ${btoa(`${B2_CONFIG.applicationKeyId}:${B2_CONFIG.applicationKey}`)}`,
+                        'Content-Type': 'application/json'
+                    },
+                    mode: 'cors'
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Auth failed: ${response.status} ${errorText}`);
+                }
+
+                const data = await response.json();
+                authToken = data.authorizationToken;
+                
+                log('✅ Autenticación exitosa', 'success');
+                log(`   Account ID: ${data.accountId}`, 'info');
+                log(`   API URL: ${data.apiUrl}`, 'info');
+                
+            } catch (error) {
+                log(`❌ Error de autenticación: ${error.message}`, 'error');
+                if (error.message.includes('CORS')) {
+                    log('💡 Problema de CORS detectado. Configura CORS en B2.', 'warning');
+                }
+            }
+        }
+
+        async function testUploadUrl() {
+            if (!authToken) {
+                log('❌ Primero debes autenticarte', 'error');
+                return;
+            }
+
+            log('🔍 Obteniendo URL de upload...', 'info');
+            
+            try {
+                const response = await fetch('https://api.backblazeb2.com/b2api/v2/b2_get_upload_url', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': authToken,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        bucketId: B2_CONFIG.bucketId
+                    }),
+                    mode: 'cors'
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Get upload URL failed: ${response.status} ${errorText}`);
+                }
+
+                const data = await response.json();
+                uploadUrl = data.uploadUrl;
+                uploadAuthToken = data.authorizationToken;
+                
+                log('✅ URL de upload obtenida', 'success');
+                log(`   Upload URL: ${uploadUrl}`, 'info');
+                
+            } catch (error) {
+                log(`❌ Error obteniendo upload URL: ${error.message}`, 'error');
+            }
+        }
+
+        async function testFileUpload() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                log('❌ Selecciona un archivo primero', 'error');
+                return;
+            }
+
+            if (!uploadUrl || !uploadAuthToken) {
+                log('❌ Primero debes obtener la URL de upload', 'error');
+                return;
+            }
+
+            log(`🔍 Subiendo archivo: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`, 'info');
+            showProgress(true);
+            updateProgress(0);
+
+            try {
+                const fileName = `test/${Date.now()}_${file.name}`;
+                
+                updateProgress(25);
+                
+                const response = await fetch(uploadUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': uploadAuthToken,
+                        'X-Bz-File-Name': encodeURIComponent(fileName),
+                        'X-Bz-Content-Type': file.type,
+                        'X-Bz-Content-Sha1': 'do_not_verify'
+                    },
+                    body: file,
+                    mode: 'cors'
+                });
+
+                updateProgress(75);
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Upload failed: ${response.status} ${errorText}`);
+                }
+
+                const result = await response.json();
+                updateProgress(100);
+                
+                log('✅ Archivo subido exitosamente', 'success');
+                log(`   File ID: ${result.fileId}`, 'info');
+                log(`   File Name: ${result.fileName}`, 'info');
+                log(`   Download URL: https://f000.backblazeb2.com/file/${B2_CONFIG.bucketName}/${fileName}`, 'info');
+                
+                // Reset upload tokens for next upload
+                uploadUrl = null;
+                uploadAuthToken = null;
+                
+            } catch (error) {
+                log(`❌ Error subiendo archivo: ${error.message}`, 'error');
+                if (error.message.includes('CORS')) {
+                    log('💡 Problema de CORS detectado. Configura CORS en B2.', 'warning');
+                }
+            } finally {
+                setTimeout(() => {
+                    showProgress(false);
+                    updateProgress(0);
+                }, 2000);
+            }
+        }
+
+        // Auto-test on page load
+        window.addEventListener('load', () => {
+            log('🚀 Página cargada. Haz clic en "Probar Autenticación" para comenzar.', 'info');
+        });
+    </script>
+</body>
+</html>

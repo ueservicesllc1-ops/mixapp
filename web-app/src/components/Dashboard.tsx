@@ -44,9 +44,9 @@ const Dashboard: React.FC = () => {
         return (
           <div className="space-y-6">
             <div>
-              <h2 className="text-2xl font-bold text-white mb-2">Biblioteca de Canciones</h2>
+              <h2 className="text-2xl font-bold text-white mb-2">Mi Biblioteca</h2>
               <p className="text-dark-400">
-                Gestiona y reproduce tus canciones subidas
+                Todas las canciones que has subido. Úsalas en tu app móvil para crear setlists.
               </p>
             </div>
             <SongLibrary userId={user?.uid || ''} />

@@ -55,12 +55,7 @@ const ProjectManager: React.FC<ProjectManagerProps> = ({ onProjectSelect, onSetl
     if (!user || !newProjectName.trim()) return;
 
     try {
-      const defaultTracks = [
-        { id: '1', name: 'Drums', volume: 0.8, muted: false, solo: false, color: '#FF6B6B' },
-        { id: '2', name: 'Bass', volume: 0.7, muted: false, solo: false, color: '#4ECDC4' },
-        { id: '3', name: 'Guitar', volume: 0.6, muted: false, solo: false, color: '#45B7D1' },
-        { id: '4', name: 'Vocals', volume: 0.9, muted: false, solo: false, color: '#96CEB4' },
-      ];
+      const defaultTracks: Array<{ id: string; name: string; volume: number; muted: boolean; solo: boolean; color: string }> = [];
 
       const projectData = {
         name: newProjectName,
@@ -86,10 +81,7 @@ const ProjectManager: React.FC<ProjectManagerProps> = ({ onProjectSelect, onSetl
     if (!user || !newSetlistName.trim()) return;
 
     try {
-      const defaultSongs = [
-        { id: '1', title: 'Canción 1', artist: 'Artista', key: 'C', bpm: 120, order: 1 },
-        { id: '2', title: 'Canción 2', artist: 'Artista', key: 'G', bpm: 140, order: 2 },
-      ];
+      const defaultSongs: Array<{ id: string; title: string; artist: string; key: string; bpm: number; order: number }> = [];
 
       const setlistData = {
         name: newSetlistName,
