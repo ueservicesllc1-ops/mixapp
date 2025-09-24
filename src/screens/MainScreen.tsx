@@ -4,7 +4,7 @@
  * @format
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,13 @@ import {
   SafeAreaView,
   ScrollView,
   Dimensions,
+  Alert,
+  Image,
 } from 'react-native';
+import { useAuth } from '../components/AuthProvider';
+import firestoreService from '../services/firestoreService';
+// import DatabaseStatusIndicator from '../components/DatabaseStatusIndicator';
+// import { useDatabaseStatus } from '../hooks/useDatabaseStatus';
 
 const { width, height } = Dimensions.get('window');
 
@@ -24,6 +30,35 @@ const MainScreen: React.FC = () => {
   const [bpm, setBpm] = useState(128);
   const [key, setKey] = useState('C');
   const [selectedTrack, setSelectedTrack] = useState(0);
+  
+  // Hook de autenticación
+  const { user, signOut } = useAuth();
+  
+  // Estado para verificar si el usuario está en Firestore
+  const [userInFirestore, setUserInFirestore] = useState<boolean>(false);
+  
+  // Hook para monitorear el estado de las bases de datos
+  // const { status: dbStatus, isLoading: dbLoading } = useDatabaseStatus();
+  
+  // Estado simulado para evitar errores
+  const dbStatus = { firestore: true, b2: true };
+
+  // Verificar si el usuario está en Firestore
+  useEffect(() => {
+    const checkUserInFirestore = async () => {
+      if (user) {
+        try {
+          const userProfile = await firestoreService.getUserProfile(user.uid);
+          setUserInFirestore(!!userProfile);
+        } catch (error) {
+          console.error('Error verificando usuario en Firestore:', error);
+          setUserInFirestore(false);
+        }
+      }
+    };
+
+    checkUserInFirestore();
+  }, [user]);
 
   const tracks = [
     { name: 'Clicks', muted: true, solo: false, volume: 0 },
@@ -69,6 +104,31 @@ const MainScreen: React.FC = () => {
     // Toggle solo logic here
   };
 
+  const handleSignOut = async () => {
+    try {
+      Alert.alert(
+        'Cerrar Sesión',
+        '¿Estás seguro de que quieres cerrar sesión?',
+        [
+          {
+            text: 'Cancelar',
+            style: 'cancel',
+          },
+          {
+            text: 'Cerrar Sesión',
+            style: 'destructive',
+            onPress: async () => {
+              await signOut();
+            },
+          },
+        ]
+      );
+    } catch (error) {
+      console.error('Error al cerrar sesión:', error);
+      Alert.alert('Error', 'Hubo un problema al cerrar sesión');
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
@@ -105,6 +165,36 @@ const MainScreen: React.FC = () => {
           <Text style={styles.timeDisplay}>{currentTime} / {totalTime}</Text>
           <Text style={styles.bpmDisplay}>{bpm} BPM</Text>
           <Text style={styles.keyDisplay}>{key}</Text>
+          
+          {/* Información del usuario */}
+          {user && (
+            <TouchableOpacity style={styles.userContainer} onPress={handleSignOut}>
+              <View style={styles.userInfo}>
+                {user.photoURL && (
+                  <Image source={{ uri: user.photoURL }} style={styles.userAvatar} />
+                )}
+                <View style={styles.userDetails}>
+                  <View style={styles.userNameContainer}>
+                    <Text style={styles.userName} numberOfLines={1}>
+                      {user.displayName || 'Usuario'}
+                    </Text>
+                    {userInFirestore && (
+                      <View style={styles.firestoreIndicator}>
+                        <Text style={styles.firestoreIcon}>☁️</Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={styles.userEmail} numberOfLines={1}>
+                    {user.email}
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
+                <Text style={styles.signOutIcon}>🚪</Text>
+              </TouchableOpacity>
+            </TouchableOpacity>
+          )}
+          
           <TouchableOpacity style={styles.midiButton}>
             <Text style={styles.midiText}>MIDI IN</Text>
           </TouchableOpacity>
@@ -442,6 +532,11 @@ const styles = StyleSheet.create({
   settingsIcon: {
     fontSize: 12,
     color: '#fff',
+  },
+  dbStatusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 8,
   },
   // LED Button Styles - Metal pulido con LED
   playButtonActive: {
@@ -1163,6 +1258,60 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 10,
     fontWeight: 'bold',
+  },
+  // Estilos para el componente de usuario
+  userContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#333',
+    borderRadius: 20,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginRight: 8,
+    maxWidth: 200,
+  },
+  userInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  userAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    marginRight: 6,
+  },
+  userDetails: {
+    flex: 1,
+    minWidth: 0,
+  },
+  userNameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  userName: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
+    flex: 1,
+  },
+  userEmail: {
+    color: '#888',
+    fontSize: 8,
+  },
+  firestoreIndicator: {
+    marginLeft: 4,
+    padding: 1,
+  },
+  firestoreIcon: {
+    fontSize: 8,
+  },
+  signOutButton: {
+    marginLeft: 4,
+    padding: 2,
+  },
+  signOutIcon: {
+    fontSize: 12,
   },
 });
 

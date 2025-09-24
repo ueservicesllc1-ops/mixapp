@@ -8,14 +8,12 @@ import { initializeApp } from '@react-native-firebase/app';
 
 // Firebase configuration
 const firebaseConfig = {
-  // You need to add your Firebase config here
-  // Get this from Firebase Console > Project Settings > General > Your apps
-  apiKey: "your-api-key",
-  authDomain: "your-project.firebaseapp.com",
-  projectId: "your-project-id",
-  storageBucket: "your-project.appspot.com",
-  messagingSenderId: "123456789",
-  appId: "your-app-id"
+  apiKey: "AIzaSyDc0B-F47iI9Oz-JcgNpOM0ENUoRG5tInE",
+  authDomain: "mixercurse2.firebaseapp.com",
+  projectId: "mixercurse2",
+  storageBucket: "mixercurse2.firebasestorage.app",
+  messagingSenderId: "509189891821",
+  appId: "1:509189891821:android:7faffa4ec71d6d266f0ee4"
 };
 
 // Initialize Firebase

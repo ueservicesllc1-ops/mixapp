@@ -24,12 +24,13 @@ const LoginScreen: React.FC = () => {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
-  const { signIn, signUp, signOut } = useAuth();
+  const { signIn, signUp, signInWithGoogle, signOut } = useAuth();
 
   // Configure Google Sign-In
   React.useEffect(() => {
     GoogleSignin.configure({
-      webClientId: 'YOUR_WEB_CLIENT_ID', // You'll need to get this from Firebase Console
+      webClientId: '509189891821-ap9k9f7o8m2tn1ah7dsbjq2i2v1nft8v.apps.googleusercontent.com',
+      offlineAccess: true,
     });
   }, []);
 
@@ -58,20 +59,12 @@ const LoginScreen: React.FC = () => {
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
     try {
-      // Check if your device supports Google Play
-      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
-
-      // Get the users ID token
-      const { idToken } = await GoogleSignin.signIn();
-
-      // Create a Google credential with the token
-      const googleCredential = auth.GoogleAuthProvider.credential(idToken);
-
-      // Sign-in the user with the credential
-      await auth().signInWithCredential(googleCredential);
-      Alert.alert('Éxito', 'Inicio de sesión con Google exitoso');
+      await signInWithGoogle();
+      // No mostrar alerta de éxito aquí, ya que el usuario será redirigido automáticamente
     } catch (error: any) {
-      Alert.alert('Error', error.message);
+      console.error('Google Sign-In Error in LoginScreen:', error);
+      const errorMessage = error?.message || 'Error al iniciar sesión con Google';
+      Alert.alert('Error de Autenticación', errorMessage);
     } finally {
       setIsLoading(false);
     }

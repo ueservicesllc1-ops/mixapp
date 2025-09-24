@@ -16,7 +16,7 @@ const AppContent: React.FC = () => {
   const { user, loading } = useAuth();
 
   if (loading) {
-    return null; // You can add a loading screen here
+    return null; // Loading screen
   }
 
   return user ? <MainScreen /> : <LoginScreen />;
