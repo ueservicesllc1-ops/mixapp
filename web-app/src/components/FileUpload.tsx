@@ -3,7 +3,7 @@
  */
 
 import React from 'react';
-import AudioLibraryUpload from './AudioLibraryUpload';
+import ZipUpload from './ZipUpload';
 
 interface FileUploadProps {
   userId: string;
@@ -12,7 +12,7 @@ interface FileUploadProps {
 
 const FileUpload: React.FC<FileUploadProps> = ({ userId, onUploadComplete }) => {
   return (
-    <AudioLibraryUpload 
+    <ZipUpload 
       userId={userId} 
       onUploadComplete={onUploadComplete}
     />

@@ -155,7 +155,7 @@ class FirestoreService {
       console.log('Adding song to library:', song);
       const docRef = await addDoc(collection(db, 'songs'), {
         ...song,
-        ownerId: userId
+        ownerId: song.ownerId || userId
       });
       console.log('Song added to library with ID:', docRef.id);
       return docRef.id;

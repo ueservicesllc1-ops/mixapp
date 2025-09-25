@@ -54,6 +54,13 @@ export interface Song {
   duration?: number;
   fileSize?: number;
   uploadDate?: Date;
+  ownerId?: string;
+  projectId?: string;
+  tracks?: {
+    name: string;
+    audioFile: string;
+    size: number;
+  }[];
 }
 
 export interface UploadProgress {

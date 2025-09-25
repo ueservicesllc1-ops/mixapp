@@ -23,7 +23,9 @@ const SongLibrary: React.FC<SongLibraryProps> = ({ userId }) => {
   const loadUserLibrary = async () => {
     try {
       setLoading(true);
+      console.log('Loading library for user:', userId);
       const userSongs = await firestoreService.getUserLibrary(userId);
+      console.log('Retrieved songs:', userSongs);
       setSongs(userSongs);
     } catch (error) {
       console.error('Error loading user library:', error);
@@ -91,7 +93,7 @@ const SongLibrary: React.FC<SongLibraryProps> = ({ userId }) => {
           className="bg-dark-600 hover:bg-dark-500 disabled:bg-dark-700 text-white px-3 py-2 rounded-lg flex items-center space-x-2 transition-colors"
         >
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          <span>Actualizar</span>
+          <span>{loading ? 'Cargando...' : 'Actualizar'}</span>
         </button>
       </div>
 
