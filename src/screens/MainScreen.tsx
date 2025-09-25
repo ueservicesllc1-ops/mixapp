@@ -4,22 +4,26 @@
  * @format
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
   ScrollView,
   Dimensions,
   Alert,
   Image,
   Modal,
+  Animated,
+  TextInput,
+  Platform,
 } from 'react-native';
-import { Drawer } from 'react-native-drawer-layout';
+import { SafeAreaView } from 'react-native-safe-area-context';
+// import DateTimePicker from '@react-native-community/datetimepicker';
+// Drawer reemplazado por Modal nativo
 import { useAuth } from '../components/AuthProvider';
-import firestoreService from '../services/firestoreService';
+import firestoreService, { Setlist, Song } from '../services/firestoreService';
 // import DatabaseStatusIndicator from '../components/DatabaseStatusIndicator';
 // import { useDatabaseStatus } from '../hooks/useDatabaseStatus';
 
@@ -33,6 +37,19 @@ const MainScreen: React.FC = () => {
   const [key, setKey] = useState('C');
   const [selectedTrack, setSelectedTrack] = useState(0);
   const [showLibraryDrawer, setShowLibraryDrawer] = useState(false);
+  const [showSetlistDrawer, setShowSetlistDrawer] = useState(false);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [setlistName, setSetlistName] = useState('');
+  const [setlists, setSetlists] = useState<Setlist[]>([]);
+  const [loadingSetlists, setLoadingSetlists] = useState(false);
+  const [showEditForm, setShowEditForm] = useState(false);
+  const [editingSetlist, setEditingSetlist] = useState<Setlist | null>(null);
+  const [editSetlistName, setEditSetlistName] = useState('');
+  const [selectedSetlist, setSelectedSetlist] = useState<Setlist | null>(null);
+  const [setlistSongs, setSetlistSongs] = useState<Song[]>([]);
+  const [loadingSongs, setLoadingSongs] = useState(false);
+  const slideAnim = useRef(new Animated.Value(0)).current;
+
   
   // Hook de autenticación
   const { user, signOut } = useAuth();
@@ -46,13 +63,16 @@ const MainScreen: React.FC = () => {
   // Estado simulado para evitar errores
   const dbStatus = { firestore: true, b2: true };
 
-  // Verificar si el usuario está en Firestore
+  // Verificar si el usuario está en Firestore y cargar setlists
   useEffect(() => {
     const checkUserInFirestore = async () => {
       if (user) {
         try {
           const userProfile = await firestoreService.getUserProfile(user.uid);
           setUserInFirestore(!!userProfile);
+          
+          // Cargar setlists del usuario
+          await loadUserSetlists();
         } catch (error) {
           console.error('Error verificando usuario en Firestore:', error);
           setUserInFirestore(false);
@@ -63,9 +83,44 @@ const MainScreen: React.FC = () => {
     checkUserInFirestore();
   }, [user]);
 
-  const tracks: Array<{ name: string; muted: boolean; solo: boolean; volume: number }> = [];
+  // Función para cargar setlists del usuario
+  const loadUserSetlists = async () => {
+    if (!user) return;
+    
+    try {
+      setLoadingSetlists(true);
+      const userSetlists = await firestoreService.getUserSetlists(user.uid);
+      setSetlists(userSetlists);
+    } catch (error) {
+      console.error('Error cargando setlists:', error);
+      Alert.alert('Error', 'No se pudieron cargar los setlists');
+    } finally {
+      setLoadingSetlists(false);
+    }
+  };
 
-  const setlistSongs: Array<{ id: number; title: string; artist: string; key: string; bpm: number; selected?: boolean }> = [];
+  // Función para cargar canciones de un setlist
+  const loadSetlistSongs = async (setlistId: string) => {
+    try {
+      setLoadingSongs(true);
+      const songs = await firestoreService.getSetlistSongs(setlistId);
+      setSetlistSongs(songs);
+    } catch (error) {
+      console.error('Error cargando canciones del setlist:', error);
+      Alert.alert('Error', 'No se pudieron cargar las canciones del setlist');
+    } finally {
+      setLoadingSongs(false);
+    }
+  };
+
+  // Función para seleccionar un setlist
+  const handleSelectSetlist = async (setlist: Setlist) => {
+    setSelectedSetlist(setlist);
+    await loadSetlistSongs(setlist.id);
+    setShowSetlistDrawer(false); // Cerrar el drawer después de seleccionar
+  };
+
+  const tracks: Array<{ name: string; muted: boolean; solo: boolean; volume: number }> = [];
 
   const musicalKeys = ['Db', 'Eb', 'Gb', 'Ab', 'Bb', 'B', 'C', 'D', 'E', 'F', 'G', 'A'];
 
@@ -106,70 +161,160 @@ const MainScreen: React.FC = () => {
     }
   };
 
+  const handleCreateSetlist = async () => {
+    if (!setlistName.trim()) {
+      Alert.alert('Error', 'Por favor completa el nombre del setlist');
+      return;
+    }
+
+    try {
+      const currentDate = new Date().toISOString().split('T')[0]; // Fecha actual en formato YYYY-MM-DD
+      await firestoreService.createSetlist({
+        name: setlistName,
+        date: currentDate, // Usar fecha actual automáticamente
+        userId: user?.uid,
+        createdAt: new Date().toISOString(),
+      });
+      
+      Alert.alert('Éxito', 'Setlist creado correctamente');
+      setSetlistName('');
+      setShowCreateForm(false);
+      
+      // Recargar la lista de setlists
+      await loadUserSetlists();
+    } catch (error) {
+      console.error('Error al crear setlist:', error);
+      Alert.alert('Error', 'No se pudo crear el setlist');
+    }
+  };
+
+  const handleEditSetlist = (setlist: Setlist) => {
+    setEditingSetlist(setlist);
+    setEditSetlistName(setlist.name);
+    setShowEditForm(true);
+  };
+
+  const handleUpdateSetlist = async () => {
+    if (!editSetlistName.trim() || !editingSetlist) {
+      Alert.alert('Error', 'Por favor completa el nombre del setlist');
+      return;
+    }
+
+    try {
+      await firestoreService.updateSetlist(editingSetlist.id, {
+        name: editSetlistName,
+      });
+      
+      Alert.alert('Éxito', 'Setlist actualizado correctamente');
+      setEditSetlistName('');
+      setEditingSetlist(null);
+      setShowEditForm(false);
+      
+      // Recargar la lista de setlists
+      await loadUserSetlists();
+    } catch (error) {
+      console.error('Error al actualizar setlist:', error);
+      Alert.alert('Error', 'No se pudo actualizar el setlist');
+    }
+  };
+
+  const handleDeleteSetlist = (setlist: Setlist) => {
+    Alert.alert(
+      'Confirmar eliminación',
+      `¿Estás seguro de que quieres eliminar el setlist "${setlist.name}"?`,
+      [
+        {
+          text: 'Cancelar',
+          style: 'cancel',
+        },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await firestoreService.deleteSetlist(setlist.id);
+              Alert.alert('Éxito', 'Setlist eliminado correctamente');
+              
+              // Recargar la lista de setlists
+              await loadUserSetlists();
+            } catch (error) {
+              console.error('Error al eliminar setlist:', error);
+              Alert.alert('Error', 'No se pudo eliminar el setlist');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+
   return (
     <SafeAreaView style={styles.container}>
-      <Drawer
-        open={showLibraryDrawer}
-        onOpen={() => setShowLibraryDrawer(true)}
-        onClose={() => setShowLibraryDrawer(false)}
-        renderDrawerContent={() => (
-          <View style={styles.drawerContainer}>
-            <View style={styles.drawerHeader}>
-              <Text style={styles.drawerTitle}>📚 Biblioteca de Audio</Text>
-              <TouchableOpacity 
-                style={styles.closeButton}
-                onPress={() => setShowLibraryDrawer(false)}
-              >
-                <Text style={styles.closeButtonText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-            
-            <ScrollView style={styles.drawerContent}>
-              <View style={styles.librarySection}>
-                <Text style={styles.librarySectionTitle}>🎵 Canciones</Text>
-                <View style={styles.libraryItem}>
-                  <Text style={styles.libraryItemIcon}>🎶</Text>
-                  <View style={styles.libraryItemInfo}>
-                    <Text style={styles.libraryItemTitle}>Canción de Ejemplo</Text>
-                    <Text style={styles.libraryItemSubtitle}>Artista • 120 BPM • C Mayor</Text>
-                  </View>
-                  <TouchableOpacity style={styles.libraryItemButton}>
-                    <Text style={styles.libraryItemButtonText}>▶</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              <View style={styles.librarySection}>
-                <Text style={styles.librarySectionTitle}>🎛️ Proyectos</Text>
-                <View style={styles.libraryItem}>
-                  <Text style={styles.libraryItemIcon}>🎚️</Text>
-                  <View style={styles.libraryItemInfo}>
-                    <Text style={styles.libraryItemTitle}>Proyecto Demo</Text>
-                    <Text style={styles.libraryItemSubtitle}>8 pistas • 128 BPM</Text>
-                  </View>
-                  <TouchableOpacity style={styles.libraryItemButton}>
-                    <Text style={styles.libraryItemButtonText}>📂</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              <View style={styles.librarySection}>
-                <Text style={styles.librarySectionTitle}>🎼 Setlists</Text>
-                <View style={styles.libraryItem}>
-                  <Text style={styles.libraryItemIcon}>📋</Text>
-                  <View style={styles.libraryItemInfo}>
-                    <Text style={styles.libraryItemTitle}>Setlist Domingo</Text>
-                    <Text style={styles.libraryItemSubtitle}>5 canciones</Text>
-                  </View>
-                  <TouchableOpacity style={styles.libraryItemButton}>
-                    <Text style={styles.libraryItemButtonText}>📂</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </ScrollView>
+    {/* Modal para la biblioteca */}
+    <Modal
+      visible={showLibraryDrawer}
+      animationType="slide"
+      presentationStyle="overFullScreen"
+      onRequestClose={() => setShowLibraryDrawer(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>📚 Biblioteca de Audio</Text>
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => setShowLibraryDrawer(false)}
+            >
+              <Text style={styles.closeButtonText}>✕</Text>
+            </TouchableOpacity>
           </View>
-        )}
-      >
+
+          <ScrollView style={styles.modalContent}>
+            <View style={styles.librarySection}>
+              <Text style={styles.librarySectionTitle}>🎵 Canciones</Text>
+              <View style={styles.libraryItem}>
+                <Text style={styles.libraryItemIcon}>🎶</Text>
+                <View style={styles.libraryItemInfo}>
+                  <Text style={styles.libraryItemTitle}>Canción de Ejemplo</Text>
+                  <Text style={styles.libraryItemSubtitle}>Artista • 120 BPM • C Mayor</Text>
+                </View>
+                <TouchableOpacity style={styles.libraryItemButton}>
+                  <Text style={styles.libraryItemButtonText}>▶</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.librarySection}>
+              <Text style={styles.librarySectionTitle}>🎛️ Proyectos</Text>
+              <View style={styles.libraryItem}>
+                <Text style={styles.libraryItemIcon}>🎚️</Text>
+                <View style={styles.libraryItemInfo}>
+                  <Text style={styles.libraryItemTitle}>Proyecto Demo</Text>
+                  <Text style={styles.libraryItemSubtitle}>8 pistas • 128 BPM</Text>
+                </View>
+                <TouchableOpacity style={styles.libraryItemButton}>
+                  <Text style={styles.libraryItemButtonText}>📂</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.librarySection}>
+              <Text style={styles.librarySectionTitle}>🎼 Setlists</Text>
+              <View style={styles.libraryItem}>
+                <Text style={styles.libraryItemIcon}>📋</Text>
+                <View style={styles.libraryItemInfo}>
+                  <Text style={styles.libraryItemTitle}>Setlist Domingo</Text>
+                  <Text style={styles.libraryItemSubtitle}>5 canciones</Text>
+                </View>
+                <TouchableOpacity style={styles.libraryItemButton}>
+                  <Text style={styles.libraryItemButtonText}>📂</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
@@ -262,8 +407,12 @@ const MainScreen: React.FC = () => {
                   </View>
                 </View>
                 <View style={styles.songDetails}>
-                  <Text style={styles.songTitle}>Praise</Text>
-                  <Text style={styles.songArtist}>Elevation Worship</Text>
+                  <Text style={styles.songTitle}>
+                    {selectedSetlist ? selectedSetlist.name : 'Sin setlist seleccionado'}
+                  </Text>
+                  <Text style={styles.songArtist}>
+                    {selectedSetlist ? `${setlistSongs.length} canciones` : 'Selecciona un setlist'}
+                  </Text>
                   <Text style={styles.songBpm}>{bpm} BPM</Text>
                 </View>
               </View>
@@ -341,95 +490,267 @@ const MainScreen: React.FC = () => {
         </View>
 
         {/* Right Panel */}
-        <View style={styles.rightPanel}>
-          {/* Setlist */}
-          <View style={styles.setlistSection}>
-            <View style={styles.setlistHeader}>
-              <TouchableOpacity style={styles.setlistButton}>
-                <Text style={styles.setlistButtonText}>Setlists</Text>
+        <View style={styles.ledScreen}>
+          {/* Song List - 70% of area */}
+          <View style={styles.songListSection}>
+            <View style={styles.ledMarquee}>
+              <Text style={styles.ledMarqueeText}>
+                {selectedSetlist ? selectedSetlist.name.toUpperCase() : 'SETLIST'}
+              </Text>
+            </View>
+            <View style={styles.buttonRow}>
+              <TouchableOpacity 
+                style={styles.setlistButton}
+                onPress={() => {
+                  console.log('Botón Setlist presionado - FUNCIONA!');
+                  setShowSetlistDrawer(true);
+                }}
+              >
+                <Text style={styles.setlistButtonText}>Setlist</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.setlistButton, styles.syncButton]}>
-                <Text style={styles.syncButtonText}>Sync</Text>
+              <TouchableOpacity style={styles.setlistButton}>
+                <Text style={styles.setlistButtonText}>Edit Setlist</Text>
               </TouchableOpacity>
             </View>
-            <Text style={styles.setlistTitle}>Sunday Setlist 20 March</Text>
-            <ScrollView style={styles.setlistContainer}>
-              {setlistSongs.map((song) => (
-                <TouchableOpacity 
-                  key={song.id} 
-                  style={[styles.songItem, song.selected && styles.selectedSong]}
-                >
-                  <View style={styles.songInfo}>
-                    <Text style={styles.songNumber}>{song.id}</Text>
-                    <View style={styles.songDetails}>
+            <ScrollView style={styles.songList}>
+              {loadingSongs ? (
+                <View style={styles.loadingContainer}>
+                  <Text style={styles.loadingText}>Cargando canciones...</Text>
+                </View>
+              ) : setlistSongs.length > 0 ? (
+                setlistSongs.map((song, index) => (
+                  <View key={song.id} style={styles.songItem}>
+                    <Text style={styles.songNumber}>{index + 1}</Text>
+                    <View style={styles.songInfo}>
                       <Text style={styles.songTitle}>{song.title}</Text>
                       <Text style={styles.songArtist}>{song.artist}</Text>
                     </View>
-                    <Text style={styles.songMenu}>⋯</Text>
+                    <View style={styles.songMeta}>
+                      <Text style={styles.songKey}>{song.key}</Text>
+                      <Text style={styles.songBpm}>{song.bpm} BPM</Text>
+                    </View>
                   </View>
-                  <View style={styles.songMeta}>
-                    <Text style={styles.songKey}>{song.key}</Text>
-                    <Text style={styles.songBpm}>{song.bpm}</Text>
-                    <Text style={styles.songPlay}>▶️</Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
+                ))
+              ) : selectedSetlist ? (
+                <View style={styles.emptySongList}>
+                  <Text style={styles.emptySongListText}>No hay canciones en este setlist</Text>
+                  <Text style={styles.emptySongListSubtext}>Agrega canciones desde la biblioteca</Text>
+                </View>
+              ) : (
+                <View style={styles.emptySongList}>
+                  <Text style={styles.emptySongListText}>Selecciona un setlist</Text>
+                  <Text style={styles.emptySongListSubtext}>Elige un setlist para ver sus canciones</Text>
+                </View>
+              )}
             </ScrollView>
+            <TouchableOpacity style={styles.libraryButton}>
+              <Text style={styles.libraryButtonText}>Biblioteca</Text>
+            </TouchableOpacity>
           </View>
-
-          {/* Library Section */}
-          <View style={styles.librarySection}>
-            <View style={styles.libraryHeader}>
-              <TouchableOpacity 
-                style={styles.libraryButton}
-                onPress={() => setShowLibraryDrawer(true)}
-              >
-                <Text style={styles.libraryButtonText}>📚</Text>
-                <Text style={styles.libraryButtonLabel}>Biblioteca</Text>
+          
+          {/* Button Grid - 30% of area */}
+          <View style={styles.buttonGridSection}>
+            <View style={styles.buttonRow}>
+              <TouchableOpacity style={styles.gridButton}>
+                <Text style={styles.gridButtonText}>1</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.editButton}>
-                <Text style={styles.editButtonText}>Edit setlist</Text>
+              <TouchableOpacity style={styles.gridButton}>
+                <Text style={styles.gridButtonText}>2</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.gridButton}>
+                <Text style={styles.gridButtonText}>3</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.gridButton}>
+                <Text style={styles.gridButtonText}>4</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.gridButton}>
+                <Text style={styles.gridButtonText}>5</Text>
               </TouchableOpacity>
             </View>
-            <View style={styles.libraryItem}>
-              <Text style={styles.libraryIcon}>🎵</Text>
-              <View style={styles.libraryInfo}>
-                <Text style={styles.libraryName}>Fundamental Ambient Pad</Text>
-                <Text style={styles.librarySource}>Loopcommunity.com</Text>
-              </View>
-            </View>
-            
-            {/* Key Selector */}
-            <View style={styles.keySelector}>
-              {musicalKeys.map((keyName) => (
-                <TouchableOpacity 
-                  key={keyName} 
-                  style={[styles.keyButton, keyName === key && styles.selectedKey]}
-                  onPress={() => setKey(keyName)}
-                >
-                  <Text style={styles.keyButtonText}>{keyName}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {/* Library Volume */}
-            <View style={styles.libraryVolume}>
-              <View style={styles.libraryFaderContainer}>
-                <View style={[styles.libraryFader, { height: 60 }]} />
-              </View>
-              <View style={styles.libraryControls}>
-                <TouchableOpacity style={styles.libraryButton}>
-                  <Text style={styles.libraryButtonText}>M</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.libraryButton}>
-                  <Text style={styles.libraryButtonText}>S</Text>
-                </TouchableOpacity>
-              </View>
+            <View style={styles.buttonRow}>
+              <TouchableOpacity style={styles.gridButton}>
+                <Text style={styles.gridButtonText}>6</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.gridButton}>
+                <Text style={styles.gridButtonText}>7</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.gridButton}>
+                <Text style={styles.gridButtonText}>8</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.gridButton}>
+                <Text style={styles.gridButtonText}>9</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.gridButton}>
+                <Text style={styles.gridButtonText}>10</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
       </View>
-      </Drawer>
+
+      {/* Setlist Drawer */}
+      <Modal
+        visible={showSetlistDrawer}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowSetlistDrawer(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.setlistDrawer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Setlist</Text>
+              <TouchableOpacity 
+                style={styles.closeButton}
+                onPress={() => setShowSetlistDrawer(false)}
+              >
+                <Text style={styles.closeButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.setlistContent}>
+              <TouchableOpacity 
+                style={styles.createSetlistButton}
+                onPress={() => setShowCreateForm(true)}
+              >
+                <Text style={styles.createSetlistButtonText}>Crear Setlist</Text>
+              </TouchableOpacity>
+              
+              {/* Lista de Setlists */}
+              <View style={styles.setlistsList}>
+                <Text style={styles.setlistsTitle}>Mis Setlists</Text>
+                {loadingSetlists ? (
+                  <View style={styles.loadingContainer}>
+                    <Text style={styles.loadingText}>Cargando setlists...</Text>
+                  </View>
+                ) : setlists.length > 0 ? (
+                  <ScrollView style={styles.setlistsScroll}>
+                    {setlists.map((setlist) => (
+                      <View key={setlist.id} style={styles.setlistItem}>
+                        <TouchableOpacity 
+                          style={styles.setlistItemContent}
+                          onPress={() => handleSelectSetlist(setlist)}
+                        >
+                          <View style={styles.setlistItemInfo}>
+                            <Text style={styles.setlistItemText}>{setlist.name}</Text>
+                            <Text style={styles.setlistItemDate}>{setlist.date}</Text>
+                          </View>
+                        </TouchableOpacity>
+                        <View style={styles.setlistItemActions}>
+                          <TouchableOpacity 
+                            style={styles.actionButton}
+                            onPress={() => handleEditSetlist(setlist)}
+                          >
+                            <Text style={styles.actionButtonText}>✏️</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity 
+                            style={[styles.actionButton, styles.deleteButton]}
+                            onPress={() => handleDeleteSetlist(setlist)}
+                          >
+                            <Text style={styles.actionButtonText}>🗑️</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ))}
+                  </ScrollView>
+                ) : (
+                  <View style={styles.emptySetlists}>
+                    <Text style={styles.emptySetlistsText}>No tienes setlists creados</Text>
+                    <Text style={styles.emptySetlistsSubtext}>Crea tu primer setlist</Text>
+                  </View>
+                )}
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal para crear setlist */}
+      <Modal
+        visible={showCreateForm}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowCreateForm(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.createFormContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Crear Setlist</Text>
+              <TouchableOpacity 
+                style={styles.closeButton}
+                onPress={() => setShowCreateForm(false)}
+              >
+                <Text style={styles.closeButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.formContent}>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Nombre del Setlist</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={setlistName}
+                  onChangeText={setSetlistName}
+                  placeholder="Ej: Servicio Dominical"
+                  placeholderTextColor="#888"
+                />
+              </View>
+              
+              
+              <TouchableOpacity 
+                style={styles.saveButton}
+                onPress={handleCreateSetlist}
+              >
+                <Text style={styles.saveButtonText}>Guardar Setlist</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal para editar setlist */}
+      <Modal
+        visible={showEditForm}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowEditForm(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.createFormContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Editar Setlist</Text>
+              <TouchableOpacity 
+                style={styles.closeButton}
+                onPress={() => {
+                  setShowEditForm(false);
+                  setEditingSetlist(null);
+                  setEditSetlistName('');
+                }}
+              >
+                <Text style={styles.closeButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.formContent}>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Nombre del Setlist</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={editSetlistName}
+                  onChangeText={setEditSetlistName}
+                  placeholder="Ej: Servicio Dominical"
+                  placeholderTextColor="#888"
+                />
+              </View>
+              
+              <TouchableOpacity 
+                style={styles.saveButton}
+                onPress={handleUpdateSetlist}
+              >
+                <Text style={styles.saveButtonText}>Actualizar Setlist</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -995,7 +1316,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   tracksSection: {
-    flex: 2,
+    flex: 7, // 70% del ancho
     padding: 15,
   },
   tracksGrid: {
@@ -1107,7 +1428,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   rightPanel: {
-    flex: 1,
+    flex: 3, // 30% del ancho
     backgroundColor: '#2a2a2a',
     padding: 15,
   },
@@ -1117,17 +1438,6 @@ const styles = StyleSheet.create({
   setlistHeader: {
     flexDirection: 'row',
     marginBottom: 10,
-  },
-  setlistButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: '#333',
-    borderRadius: 4,
-    marginRight: 10,
-  },
-  setlistButtonText: {
-    color: '#fff',
-    fontSize: 12,
   },
   syncButton: {
     backgroundColor: '#2196F3',
@@ -1462,6 +1772,483 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+
+  // Estilos para Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContainer: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 10,
+    padding: 0,
+    width: '90%',
+    height: '80%',
+    maxWidth: 400,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
+    backgroundColor: '#2a2a2a',
+    borderTopLeftRadius: 10,
+    borderTopRightRadius: 10,
+  },
+  modalTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  modalContent: {
+    flex: 1,
+    padding: 20,
+  },
+
+  // Estilos para Pantalla LED
+  ledScreen: {
+    flex: 2.6,
+    backgroundColor: '#000',
+    borderWidth: 3,
+    borderColor: '#333',
+    borderRadius: 8,
+    overflow: 'hidden',
+    shadowColor: '#00ff00',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  ledDisplay: {
+    flex: 3,
+    backgroundColor: '#000',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  ledTopModule: {
+    flex: 7,
+    backgroundColor: '#020b02',
+    borderBottomWidth: 2,
+    borderBottomColor: '#0a3a0a',
+  },
+  ledTopBezel: {
+    flex: 1,
+    margin: 10,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#0f0',
+    backgroundColor: '#001900',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ledTopTitle: {
+    color: '#00ff66',
+    fontWeight: 'bold',
+    letterSpacing: 2,
+  },
+  ledMatrix: {
+    backgroundColor: '#111',
+    padding: 15,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#333',
+    shadowColor: '#00ff00',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+  },
+  ledRow: {
+    flexDirection: 'row',
+    marginBottom: 3,
+  },
+  ledPixel: {
+    width: 12,
+    height: 12,
+    borderRadius: 2,
+    marginHorizontal: 1,
+    shadowOffset: { width: 0, height: 0 },
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  ledRed: {
+    backgroundColor: '#ff0040',
+    shadowColor: '#ff0040',
+    shadowOpacity: 1,
+  },
+  ledGreen: {
+    backgroundColor: '#00ff40',
+    shadowColor: '#00ff40',
+    shadowOpacity: 1,
+  },
+  ledBlue: {
+    backgroundColor: '#0040ff',
+    shadowColor: '#0040ff',
+    shadowOpacity: 1,
+  },
+  ledStatusBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#1a1a1a',
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    borderTopWidth: 2,
+    borderTopColor: '#333',
+    marginTop: 20,
+  },
+  ledStatusIndicator: {
+    alignItems: 'center',
+    minWidth: 50,
+  },
+  ledStatusText: {
+    color: '#888',
+    fontSize: 10,
+    fontWeight: 'bold',
+    marginBottom: 2,
+  },
+  ledStatusValue: {
+    color: '#00ff00',
+    fontSize: 12,
+    fontWeight: 'bold',
+    fontFamily: 'monospace',
+  },
+
+  // Estilos para las nuevas secciones
+  songListSection: {
+    flex: 7,
+    backgroundColor: '#2a2a2a',
+    padding: 15,
+  },
+  ledMarquee: {
+    backgroundColor: '#000',
+    borderWidth: 2,
+    borderColor: '#00ff00',
+    borderRadius: 4,
+    padding: 8,
+    marginBottom: 15,
+    alignItems: 'center',
+  },
+  ledMarqueeText: {
+    color: '#00ff00',
+    fontSize: 14,
+    fontWeight: 'bold',
+    fontFamily: 'monospace',
+    letterSpacing: 2,
+  },
+  setlistButton: {
+    backgroundColor: '#333',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 4,
+    marginRight: 10,
+    alignItems: 'center',
+  },
+  setlistButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  libraryButton: {
+    backgroundColor: '#333',
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: 4,
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+  },
+  libraryButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  songList: {
+    flex: 1,
+  },
+  songItem: {
+    backgroundColor: '#333',
+    padding: 12,
+    borderRadius: 6,
+    marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  songNumber: {
+    color: '#888',
+    fontSize: 12,
+    marginRight: 10,
+    minWidth: 20,
+    textAlign: 'center',
+  },
+  songInfo: {
+    flex: 1,
+    marginRight: 10,
+  },
+  songTitle: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginBottom: 2,
+  },
+  songArtist: {
+    color: '#888',
+    fontSize: 10,
+  },
+  songMeta: {
+    alignItems: 'flex-end',
+  },
+  songKey: {
+    color: '#00aaff',
+    fontSize: 10,
+    fontWeight: 'bold',
+    marginBottom: 2,
+  },
+  songBpm: {
+    color: '#00aaff',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  buttonGridSection: {
+    flex: 3,
+    backgroundColor: '#1a1a1a',
+    padding: 15,
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  gridButton: {
+    flex: 1,
+    height: 40,
+    backgroundColor: '#333',
+    borderRadius: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginHorizontal: 2,
+  },
+  gridButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
+  setlistDrawer: {
+    width: '42%',
+    height: '100%',
+    backgroundColor: '#2a2a2a',
+    borderLeftWidth: 2,
+    borderLeftColor: '#00ff00',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
+  },
+  modalTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  closeButton: {
+    width: 30,
+    height: 30,
+    backgroundColor: '#333',
+    borderRadius: 15,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  setlistContent: {
+    flex: 1,
+    padding: 20,
+  },
+  setlistItem: {
+    backgroundColor: '#333',
+    padding: 15,
+    borderRadius: 8,
+    marginBottom: 10,
+  },
+  setlistItemText: {
+    color: '#fff',
+    fontSize: 14,
+  },
+  createSetlistButton: {
+    backgroundColor: '#00ff00',
+    paddingHorizontal: 30,
+    paddingVertical: 15,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 50,
+  },
+  createSetlistButtonText: {
+    color: '#000',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  createFormContainer: {
+    width: '28%',
+    backgroundColor: '#2a2a2a',
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#00ff00',
+  },
+  formContent: {
+    padding: 20,
+  },
+  inputGroup: {
+    marginBottom: 20,
+  },
+  inputLabel: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  textInput: {
+    backgroundColor: '#333',
+    color: '#fff',
+    padding: 12,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#555',
+    fontSize: 14,
+  },
+  saveButton: {
+    backgroundColor: '#00ff00',
+    paddingVertical: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  saveButtonText: {
+    color: '#000',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  // Estilos para la lista de setlists
+  setlistsList: {
+    flex: 1,
+    marginTop: 20,
+  },
+  setlistsTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  setlistsScroll: {
+    flex: 1,
+  },
+  setlistItem: {
+    backgroundColor: '#333',
+    borderRadius: 8,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#555',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  setlistItemContent: {
+    flex: 1,
+    padding: 15,
+  },
+  setlistItemInfo: {
+    flex: 1,
+  },
+  setlistItemText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginBottom: 5,
+  },
+  setlistItemDate: {
+    color: '#888',
+    fontSize: 12,
+  },
+  setlistItemActions: {
+    flexDirection: 'row',
+    paddingRight: 10,
+  },
+  actionButton: {
+    width: 35,
+    height: 35,
+    borderRadius: 17.5,
+    backgroundColor: '#555',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  deleteButton: {
+    backgroundColor: '#ff4444',
+  },
+  actionButtonText: {
+    fontSize: 16,
+  },
+  emptySetlists: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  emptySetlistsText: {
+    color: '#888',
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 5,
+  },
+  emptySetlistsSubtext: {
+    color: '#666',
+    fontSize: 12,
+    textAlign: 'center',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  loadingText: {
+    color: '#888',
+    fontSize: 14,
+  },
+  // Estilos para lista de canciones vacía
+  emptySongList: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  emptySongListText: {
+    color: '#888',
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 5,
+  },
+  emptySongListSubtext: {
+    color: '#666',
+    fontSize: 12,
+    textAlign: 'center',
   },
 });
 

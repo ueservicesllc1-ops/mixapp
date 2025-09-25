@@ -4,7 +4,21 @@
  * @format
  */
 
-import firestore from '@react-native-firebase/firestore';
+import firestore, { 
+  collection, 
+  doc, 
+  getDocs, 
+  getDoc, 
+  setDoc, 
+  updateDoc, 
+  deleteDoc, 
+  addDoc, 
+  query, 
+  where, 
+  orderBy, 
+  onSnapshot,
+  getFirestore
+} from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
 
 export interface UserProfile {
@@ -41,9 +55,10 @@ export interface Track {
 export interface Setlist {
   id: string;
   name: string;
-  ownerId: string;
+  date: string;
+  userId: string;
   songs: Song[];
-  createdAt: Date;
+  createdAt: string;
   updatedAt: Date;
 }
 
@@ -58,7 +73,7 @@ export interface Song {
 }
 
 class FirestoreService {
-  private db = firestore();
+  private db = getFirestore();
 
   // User Profile Operations
   async createUserProfile(user: any): Promise<void> {
@@ -71,16 +86,18 @@ class FirestoreService {
       updatedAt: new Date(),
     };
 
-    await this.db.collection('users').doc(user.uid).set(userProfile);
+    await setDoc(doc(this.db, 'users', user.uid), userProfile);
   }
 
   async getUserProfile(uid: string): Promise<UserProfile | null> {
-    const doc = await this.db.collection('users').doc(uid).get();
-    return doc.exists ? doc.data() as UserProfile : null;
+    const docRef = doc(this.db, 'users', uid);
+    const docSnap = await getDoc(docRef);
+    return docSnap.exists() ? docSnap.data() as UserProfile : null;
   }
 
   async updateUserProfile(uid: string, updates: Partial<UserProfile>): Promise<void> {
-    await this.db.collection('users').doc(uid).update({
+    const docRef = doc(this.db, 'users', uid);
+    await updateDoc(docRef, {
       ...updates,
       updatedAt: new Date(),
     });
@@ -94,16 +111,17 @@ class FirestoreService {
       updatedAt: new Date(),
     };
 
-    const docRef = await this.db.collection('projects').add(project);
+    const docRef = await addDoc(collection(this.db, 'projects'), project);
     return docRef.id;
   }
 
   async getUserProjects(ownerId: string): Promise<Project[]> {
-    const snapshot = await this.db
-      .collection('projects')
-      .where('ownerId', '==', ownerId)
-      .orderBy('updatedAt', 'desc')
-      .get();
+    const q = query(
+      collection(this.db, 'projects'),
+      where('ownerId', '==', ownerId),
+      orderBy('updatedAt', 'desc')
+    );
+    const snapshot = await getDocs(q);
 
     return snapshot.docs.map(doc => ({
       id: doc.id,
@@ -112,65 +130,76 @@ class FirestoreService {
   }
 
   async updateProject(projectId: string, updates: Partial<Project>): Promise<void> {
-    await this.db.collection('projects').doc(projectId).update({
+    const docRef = doc(this.db, 'projects', projectId);
+    await updateDoc(docRef, {
       ...updates,
       updatedAt: new Date(),
     });
   }
 
   async deleteProject(projectId: string): Promise<void> {
-    await this.db.collection('projects').doc(projectId).delete();
+    const docRef = doc(this.db, 'projects', projectId);
+    await deleteDoc(docRef);
   }
 
   // Setlist Operations
-  async createSetlist(setlistData: Omit<Setlist, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
-    const setlist: Omit<Setlist, 'id'> = {
+  async createSetlist(setlistData: { name: string; date: string; userId: string; createdAt: string }): Promise<string> {
+    const setlist = {
       ...setlistData,
-      createdAt: new Date(),
+      songs: [],
       updatedAt: new Date(),
     };
 
-    const docRef = await this.db.collection('setlists').add(setlist);
+    const docRef = await addDoc(collection(this.db, 'setlists'), setlist);
     return docRef.id;
   }
 
-  async getUserSetlists(ownerId: string): Promise<Setlist[]> {
-    const snapshot = await this.db
-      .collection('setlists')
-      .where('ownerId', '==', ownerId)
-      .orderBy('updatedAt', 'desc')
-      .get();
+  async getUserSetlists(userId: string): Promise<Setlist[]> {
+    const q = query(
+      collection(this.db, 'setlists'),
+      where('userId', '==', userId)
+    );
+    const snapshot = await getDocs(q);
 
-    return snapshot.docs.map(doc => ({
+    // Ordenar los resultados en el cliente por updatedAt descendente
+    const setlists = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data(),
     })) as Setlist[];
+
+    // Ordenar por fecha de actualización (más reciente primero)
+    return setlists.sort((a, b) => {
+      const dateA = a.updatedAt instanceof Date ? a.updatedAt : new Date(a.updatedAt);
+      const dateB = b.updatedAt instanceof Date ? b.updatedAt : new Date(b.updatedAt);
+      return dateB.getTime() - dateA.getTime();
+    });
   }
 
   async updateSetlist(setlistId: string, updates: Partial<Setlist>): Promise<void> {
-    await this.db.collection('setlists').doc(setlistId).update({
+    const docRef = doc(this.db, 'setlists', setlistId);
+    await updateDoc(docRef, {
       ...updates,
       updatedAt: new Date(),
     });
   }
 
   async deleteSetlist(setlistId: string): Promise<void> {
-    await this.db.collection('setlists').doc(setlistId).delete();
+    const docRef = doc(this.db, 'setlists', setlistId);
+    await deleteDoc(docRef);
   }
 
   // Song Operations
   async addSongToSetlist(setlistId: string, song: Omit<Song, 'id'>): Promise<string> {
-    const docRef = await this.db.collection('setlists').doc(setlistId).collection('songs').add(song);
+    const docRef = await addDoc(collection(this.db, 'setlists', setlistId, 'songs'), song);
     return docRef.id;
   }
 
   async getSetlistSongs(setlistId: string): Promise<Song[]> {
-    const snapshot = await this.db
-      .collection('setlists')
-      .doc(setlistId)
-      .collection('songs')
-      .orderBy('order')
-      .get();
+    const q = query(
+      collection(this.db, 'setlists', setlistId, 'songs'),
+      orderBy('order')
+    );
+    const snapshot = await getDocs(q);
 
     return snapshot.docs.map(doc => ({
       id: doc.id,
@@ -180,31 +209,40 @@ class FirestoreService {
 
   // Real-time listeners
   subscribeToUserProjects(ownerId: string, callback: (projects: Project[]) => void) {
-    return this.db
-      .collection('projects')
-      .where('ownerId', '==', ownerId)
-      .orderBy('updatedAt', 'desc')
-      .onSnapshot(snapshot => {
-        const projects = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as Project[];
-        callback(projects);
-      });
+    const q = query(
+      collection(this.db, 'projects'),
+      where('ownerId', '==', ownerId),
+      orderBy('updatedAt', 'desc')
+    );
+    return onSnapshot(q, snapshot => {
+      const projects = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as Project[];
+      callback(projects);
+    });
   }
 
-  subscribeToUserSetlists(ownerId: string, callback: (setlists: Setlist[]) => void) {
-    return this.db
-      .collection('setlists')
-      .where('ownerId', '==', ownerId)
-      .orderBy('updatedAt', 'desc')
-      .onSnapshot(snapshot => {
-        const setlists = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as Setlist[];
-        callback(setlists);
+  subscribeToUserSetlists(userId: string, callback: (setlists: Setlist[]) => void) {
+    const q = query(
+      collection(this.db, 'setlists'),
+      where('userId', '==', userId)
+    );
+    return onSnapshot(q, snapshot => {
+      const setlists = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as Setlist[];
+
+      // Ordenar por fecha de actualización (más reciente primero)
+      const sortedSetlists = setlists.sort((a, b) => {
+        const dateA = a.updatedAt instanceof Date ? a.updatedAt : new Date(a.updatedAt);
+        const dateB = b.updatedAt instanceof Date ? b.updatedAt : new Date(b.updatedAt);
+        return dateB.getTime() - dateA.getTime();
       });
+
+      callback(sortedSetlists);
+    });
   }
 }
 

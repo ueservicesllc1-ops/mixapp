@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import { StatusBar } from 'react-native';
+import { StatusBar, View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import './src/config/firebase'; // Initialize Firebase first
 import { AuthProvider, useAuth } from './src/components/AuthProvider';
@@ -16,7 +16,12 @@ const AppContent: React.FC = () => {
   const { user, loading } = useAuth();
 
   if (loading) {
-    return null; // Loading screen
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#00ff00" />
+        <Text style={styles.loadingText}>Cargando MixerCurse...</Text>
+      </View>
+    );
   }
 
   return user ? <MainScreen /> : <LoginScreen />;
@@ -32,5 +37,20 @@ function App() {
     </SafeAreaProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#1a1a1a',
+  },
+  loadingText: {
+    color: '#fff',
+    fontSize: 16,
+    marginTop: 20,
+    fontWeight: 'bold',
+  },
+});
 
 export default App;

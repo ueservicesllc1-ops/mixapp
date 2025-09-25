@@ -5,7 +5,7 @@
  */
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
+import auth, { FirebaseAuthTypes, onAuthStateChanged, GoogleAuthProvider, signInWithCredential, getAuth } from '@react-native-firebase/auth';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import firestoreService from '../services/firestoreService';
 
@@ -43,7 +43,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       offlineAccess: true,
     });
 
-    const unsubscribe = auth().onAuthStateChanged(async (user) => {
+    const unsubscribe = onAuthStateChanged(getAuth(), async (user) => {
       setUser(user);
       setLoading(false);
       
@@ -83,11 +83,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const signIn = async (email: string, password: string) => {
-    await auth().signInWithEmailAndPassword(email, password);
+    const { signInWithEmailAndPassword } = await import('@react-native-firebase/auth');
+    await signInWithEmailAndPassword(getAuth(), email, password);
   };
 
   const signUp = async (email: string, password: string) => {
-    await auth().createUserWithEmailAndPassword(email, password);
+    const { createUserWithEmailAndPassword } = await import('@react-native-firebase/auth');
+    await createUserWithEmailAndPassword(getAuth(), email, password);
   };
 
   const signInWithGoogle = async () => {
@@ -115,10 +117,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       console.log('Token obtenido exitosamente:', idToken.substring(0, 20) + '...');
       
       // Create a Google credential with the token
-      const googleCredential = auth.GoogleAuthProvider.credential(idToken);
+      const googleCredential = GoogleAuthProvider.credential(idToken);
       
       // Sign-in the user with the credential
-      await auth().signInWithCredential(googleCredential);
+      await signInWithCredential(getAuth(), googleCredential);
       console.log('Autenticación con Firebase exitosa');
     } catch (error: any) {
       console.error('Google Sign-In Error completo:', error);
@@ -170,7 +172,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Sign out from Google
       await GoogleSignin.signOut();
       // Sign out from Firebase
-      await auth().signOut();
+      const { signOut: firebaseSignOut } = await import('@react-native-firebase/auth');
+      await firebaseSignOut(getAuth());
     } catch (error: any) {
       console.error('Sign Out Error:', error);
       throw error;
