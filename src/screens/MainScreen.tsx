@@ -17,6 +17,7 @@ import {
   Image,
   Modal,
 } from 'react-native';
+import { Drawer } from 'react-native-drawer-layout';
 import { useAuth } from '../components/AuthProvider';
 import firestoreService from '../services/firestoreService';
 // import DatabaseStatusIndicator from '../components/DatabaseStatusIndicator';
@@ -31,7 +32,7 @@ const MainScreen: React.FC = () => {
   const [bpm, setBpm] = useState(128);
   const [key, setKey] = useState('C');
   const [selectedTrack, setSelectedTrack] = useState(0);
-  const [showLibraryModal, setShowLibraryModal] = useState(false);
+  const [showLibraryDrawer, setShowLibraryDrawer] = useState(false);
   
   // Hook de autenticación
   const { user, signOut } = useAuth();
@@ -107,6 +108,68 @@ const MainScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
+      <Drawer
+        open={showLibraryDrawer}
+        onOpen={() => setShowLibraryDrawer(true)}
+        onClose={() => setShowLibraryDrawer(false)}
+        renderDrawerContent={() => (
+          <View style={styles.drawerContainer}>
+            <View style={styles.drawerHeader}>
+              <Text style={styles.drawerTitle}>📚 Biblioteca de Audio</Text>
+              <TouchableOpacity 
+                style={styles.closeButton}
+                onPress={() => setShowLibraryDrawer(false)}
+              >
+                <Text style={styles.closeButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView style={styles.drawerContent}>
+              <View style={styles.librarySection}>
+                <Text style={styles.librarySectionTitle}>🎵 Canciones</Text>
+                <View style={styles.libraryItem}>
+                  <Text style={styles.libraryItemIcon}>🎶</Text>
+                  <View style={styles.libraryItemInfo}>
+                    <Text style={styles.libraryItemTitle}>Canción de Ejemplo</Text>
+                    <Text style={styles.libraryItemSubtitle}>Artista • 120 BPM • C Mayor</Text>
+                  </View>
+                  <TouchableOpacity style={styles.libraryItemButton}>
+                    <Text style={styles.libraryItemButtonText}>▶</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <View style={styles.librarySection}>
+                <Text style={styles.librarySectionTitle}>🎛️ Proyectos</Text>
+                <View style={styles.libraryItem}>
+                  <Text style={styles.libraryItemIcon}>🎚️</Text>
+                  <View style={styles.libraryItemInfo}>
+                    <Text style={styles.libraryItemTitle}>Proyecto Demo</Text>
+                    <Text style={styles.libraryItemSubtitle}>8 pistas • 128 BPM</Text>
+                  </View>
+                  <TouchableOpacity style={styles.libraryItemButton}>
+                    <Text style={styles.libraryItemButtonText}>📂</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <View style={styles.librarySection}>
+                <Text style={styles.librarySectionTitle}>🎼 Setlists</Text>
+                <View style={styles.libraryItem}>
+                  <Text style={styles.libraryItemIcon}>📋</Text>
+                  <View style={styles.libraryItemInfo}>
+                    <Text style={styles.libraryItemTitle}>Setlist Domingo</Text>
+                    <Text style={styles.libraryItemSubtitle}>5 canciones</Text>
+                  </View>
+                  <TouchableOpacity style={styles.libraryItemButton}>
+                    <Text style={styles.libraryItemButtonText}>📂</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </ScrollView>
+          </View>
+        )}
+      >
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
@@ -319,7 +382,7 @@ const MainScreen: React.FC = () => {
             <View style={styles.libraryHeader}>
               <TouchableOpacity 
                 style={styles.libraryButton}
-                onPress={() => setShowLibraryModal(true)}
+                onPress={() => setShowLibraryDrawer(true)}
               >
                 <Text style={styles.libraryButtonText}>📚</Text>
                 <Text style={styles.libraryButtonLabel}>Biblioteca</Text>
@@ -366,72 +429,7 @@ const MainScreen: React.FC = () => {
           </View>
         </View>
       </View>
-
-      {/* Modal de Biblioteca */}
-      <Modal
-        visible={showLibraryModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowLibraryModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.libraryModal}>
-            <View style={styles.libraryHeader}>
-              <Text style={styles.libraryModalTitle}>📚 Biblioteca de Audio</Text>
-              <TouchableOpacity 
-                style={styles.closeButton}
-                onPress={() => setShowLibraryModal(false)}
-              >
-                <Text style={styles.closeButtonText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-            
-            <ScrollView style={styles.libraryContent}>
-              <View style={styles.librarySection}>
-                <Text style={styles.librarySectionTitle}>🎵 Canciones</Text>
-                <View style={styles.libraryItem}>
-                  <Text style={styles.libraryItemIcon}>🎶</Text>
-                  <View style={styles.libraryItemInfo}>
-                    <Text style={styles.libraryItemTitle}>Canción de Ejemplo</Text>
-                    <Text style={styles.libraryItemSubtitle}>Artista • 120 BPM • C Mayor</Text>
-                  </View>
-                  <TouchableOpacity style={styles.libraryItemButton}>
-                    <Text style={styles.libraryItemButtonText}>▶</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              <View style={styles.librarySection}>
-                <Text style={styles.librarySectionTitle}>🎛️ Proyectos</Text>
-                <View style={styles.libraryItem}>
-                  <Text style={styles.libraryItemIcon}>🎚️</Text>
-                  <View style={styles.libraryItemInfo}>
-                    <Text style={styles.libraryItemTitle}>Proyecto Demo</Text>
-                    <Text style={styles.libraryItemSubtitle}>8 pistas • 128 BPM</Text>
-                  </View>
-                  <TouchableOpacity style={styles.libraryItemButton}>
-                    <Text style={styles.libraryItemButtonText}>📂</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              <View style={styles.librarySection}>
-                <Text style={styles.librarySectionTitle}>🎼 Setlists</Text>
-                <View style={styles.libraryItem}>
-                  <Text style={styles.libraryItemIcon}>📋</Text>
-                  <View style={styles.libraryItemInfo}>
-                    <Text style={styles.libraryItemTitle}>Setlist Domingo</Text>
-                    <Text style={styles.libraryItemSubtitle}>5 canciones</Text>
-                  </View>
-                  <TouchableOpacity style={styles.libraryItemButton}>
-                    <Text style={styles.libraryItemButtonText}>📂</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
+      </Drawer>
     </SafeAreaView>
   );
 };
@@ -1381,27 +1379,22 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   // Estilos para el modal de biblioteca
-  modalOverlay: {
+  drawerContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    justifyContent: 'flex-end',
-  },
-  libraryModal: {
     backgroundColor: '#1a1a1a',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: '80%',
-    minHeight: '60%',
+    width: width * 0.8, // 80% del ancho de la pantalla
   },
-  libraryHeader: {
+  drawerHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#333',
+    backgroundColor: '#2a2a2a',
   },
-  libraryModalTitle: {
+  drawerTitle: {
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
@@ -1419,7 +1412,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  libraryContent: {
+  drawerContent: {
     flex: 1,
     padding: 20,
   },
