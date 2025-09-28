@@ -1555,6 +1555,7 @@ const MainScreen: React.FC = () => {
                         const downloadSong = async () => {
                           try {
                             console.log('🎵 Descargando canción nueva:', song.title);
+                            console.log('🔍 Objeto song completo:', JSON.stringify(song, null, 2));
                             addDebugLog(`🎵 Iniciando descarga: ${song.title}`);
                             setIsDownloading(true);
                             setDownloadingFile(`Descargando ${song.title}...`);
@@ -1567,7 +1568,28 @@ const MainScreen: React.FC = () => {
                             }
                           
                             // Descarga con ReactNativeBlobUtil pero simplificada
-                            const downloadUrl = `https://mixercur.s3.us-east-005.backblazeb2.com/audio/newsong_1759075775311_kww4dczlq/newsongs/newsong_1759075775311_kww4dczlq/The+Reason+(Espa%C3%B1ol)+-+Nico+Borie.mp3.wav`;
+                            const downloadUrl = song.b2Url || song.audioFile || song.downloadUrl || song.url || song.fileUrl || '';
+                            
+                            console.log('🔍 URLs disponibles:', {
+                              b2Url: song.b2Url,
+                              audioFile: song.audioFile,
+                              downloadUrl: song.downloadUrl,
+                              url: song.url,
+                              fileUrl: song.fileUrl,
+                              finalUrl: downloadUrl
+                            });
+                            
+                            if (!downloadUrl || downloadUrl === 'null' || downloadUrl === 'undefined' || downloadUrl.trim() === '') {
+                              const availableUrls = {
+                                b2Url: song.b2Url,
+                                audioFile: song.audioFile,
+                                downloadUrl: song.downloadUrl,
+                                url: song.url,
+                                fileUrl: song.fileUrl
+                              };
+                              console.error('❌ No se encontró URL válida. URLs disponibles:', availableUrls);
+                              throw new Error(`No se encontró URL de descarga válida para "${song.title}". URLs disponibles: ${JSON.stringify(availableUrls)}`);
+                            }
                             
                             console.log('📥 Descargando desde:', downloadUrl);
                             

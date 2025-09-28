@@ -427,6 +427,9 @@ class FirestoreService {
       }));
       
       console.log('🎵 Found new songs:', newSongs.length);
+      if (newSongs.length > 0) {
+        console.log('🔍 First song structure:', JSON.stringify(newSongs[0], null, 2));
+      }
       return newSongs;
     } catch (error) {
       console.error('❌ Error getting user new songs:', error);
