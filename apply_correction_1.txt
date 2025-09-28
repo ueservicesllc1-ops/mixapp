@@ -1,0 +1,16 @@
+// APLICANDO CORRECCIÓN 1: Agregar estados para barra de progreso
+
+// ANTES (líneas 52-53):
+const [tracks, setTracks] = useState<any[]>([]);
+const slideAnim = useRef(new Animated.Value(0)).current;
+
+// DESPUÉS:
+const [tracks, setTracks] = useState<any[]>([]);
+const [progress, setProgress] = useState(0);
+const [duration, setDuration] = useState(0);
+const [isLoading, setIsLoading] = useState(false);
+const slideAnim = useRef(new Animated.Value(0)).current;
+
+
+
+

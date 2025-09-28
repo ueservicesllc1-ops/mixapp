@@ -1,0 +1,33 @@
+// PASO 6: Agregar estilos después de headerCenter (línea 1569)
+  headerCenter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 2,
+    justifyContent: 'center',
+  },
+  progressContainer: {
+    marginBottom: 20,
+    paddingHorizontal: 20,
+  },
+  progressText: {
+    color: '#fff',
+    fontSize: 12,
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  progressBar: {
+    height: 4,
+    backgroundColor: '#333',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#4CAF50',
+    borderRadius: 2,
+  },
+  controlButton: {
+
+
+
+

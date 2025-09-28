@@ -118,13 +118,29 @@ const ZipUpload: React.FC<ZipUploadProps> = ({ userId, onUploadComplete }) => {
 
   const getTrackName = (filename: string) => {
     // Extraer nombre del track sin la extensión y rutas
-    const name = filename.split('/').pop() || filename;
-    return name.replace(/\.[^/.]+$/, '');
+    let name = filename.split('/').pop() || filename;
+    name = name.replace(/\.[^/.]+$/, '');
+    
+    // Normalizar el nombre: eliminar tildes, espacios, caracteres especiales
+    name = name
+      .normalize('NFD') // Descomponer caracteres acentuados
+      .replace(/[\u0300-\u036f]/g, '') // Eliminar marcas diacríticas (tildes)
+      .replace(/[^a-zA-Z0-9]/g, '') // Eliminar todo excepto letras y números
+      .toUpperCase(); // Convertir a mayúsculas
+    
+    return name;
   };
 
   const updateTrackName = (index: number, newName: string) => {
+    // Normalizar el nombre ingresado por el usuario
+    const normalizedName = newName
+      .normalize('NFD') // Descomponer caracteres acentuados
+      .replace(/[\u0300-\u036f]/g, '') // Eliminar marcas diacríticas (tildes)
+      .replace(/[^a-zA-Z0-9]/g, '') // Eliminar todo excepto letras y números
+      .toUpperCase(); // Convertir a mayúsculas
+    
     setTracks(prev => prev.map((track, i) => 
-      i === index ? { ...track, name: newName } : track
+      i === index ? { ...track, name: normalizedName } : track
     ));
   };
 
@@ -140,10 +156,21 @@ const ZipUpload: React.FC<ZipUploadProps> = ({ userId, onUploadComplete }) => {
 
     setIsUploading(true);
     try {
-      // Subir cada track a B2
+      // Generar un ID único para esta canción
+      const songId = `song_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      console.log('Generated songId:', songId);
+      
+      // Subir cada track a B2 en la carpeta de la canción
       const uploadedTracks = [];
       for (const track of tracks) {
-        const downloadURL = await realB2Service.uploadAudioFile(track.file, userId);
+        console.log(`Uploading track: ${track.name} to song folder: ${songId}`);
+        const downloadURL = await realB2Service.uploadAudioFile(
+          track.file, 
+          userId, 
+          undefined, 
+          songId, 
+          track.name
+        );
         uploadedTracks.push({
           name: track.name,
           audioFile: downloadURL,

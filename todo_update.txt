@@ -1,0 +1,18 @@
+TODO: Implementar correcciones de audio
+
+✅ IDENTIFICADOS LOS PROBLEMAS:
+1. Botón play se queda en pausa - Problema en toggleTrackPlay
+2. Audio no suena - Está usando Alert.alert en lugar de audio real
+3. Barra de progreso no funciona - Falta implementación
+
+✅ SOLUCIONES PREPARADAS:
+1. Corregir toggleTrackPlay para usar nuevo objeto
+2. Remover Alert.alert y usar console.log
+3. Agregar estados para barra de progreso
+4. Implementar useEffect para actualizar progreso
+
+🔄 PRÓXIMOS PASOS:
+- Aplicar las correcciones al archivo MainScreen.tsx
+- Probar funcionalidad
+- Implementar audio real si es necesario
+

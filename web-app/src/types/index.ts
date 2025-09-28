@@ -69,3 +69,18 @@ export interface UploadProgress {
   status: 'uploading' | 'completed' | 'error';
   error?: string;
 }
+
+export interface LEDImage {
+  id: string;
+  name: string;
+  songName: string;
+  imageUrl: string;
+  ownerId: string;
+  createdAt: Date;
+  updatedAt: Date;
+  fileSize?: number;
+  dimensions?: {
+    width: number;
+    height: number;
+  };
+}

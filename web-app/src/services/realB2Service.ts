@@ -12,7 +12,9 @@ class RealB2Service {
   async uploadAudioFile(
     file: File,
     userId: string,
-    onProgress?: (progress: UploadProgress) => void
+    onProgress?: (progress: UploadProgress) => void,
+    songId?: string,
+    trackName?: string
   ): Promise<string> {
     try {
       console.log('Starting upload via proxy backend...');
@@ -29,6 +31,19 @@ class RealB2Service {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('userId', userId);
+      
+      // Agregar songId y trackName si se proporcionan
+      if (songId) {
+        formData.append('songId', songId);
+      }
+      if (trackName) {
+        formData.append('trackName', trackName);
+      }
+      
+      // Si se proporciona songId y es para canciones nuevas, marcar como carpeta newsongs
+      if (songId && songId.startsWith('newsong_')) {
+        formData.append('folder', 'newsongs');
+      }
 
       if (onProgress) {
         onProgress({

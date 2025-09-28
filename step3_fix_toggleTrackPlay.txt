@@ -1,0 +1,29 @@
+// PASO 3: Reemplazar función toggleTrackPlay (líneas 398-430)
+// Función para toggle play/pause de un track individual
+const toggleTrackPlay = (trackIndex: number) => {
+  console.log(`Toggle play para track ${trackIndex}`);
+  
+  setTracks(prevTracks => {
+    const newTracks = [...prevTracks];
+    const track = newTracks[trackIndex];
+    
+    if (!track) return prevTracks;
+    
+    // CORRECCIÓN: Crear nuevo objeto en lugar de mutación directa
+    newTracks[trackIndex] = {
+      ...track,
+      playing: !track.playing
+    };
+    
+    if (newTracks[trackIndex].playing) {
+      console.log(`🎵 Reproduciendo track: ${track.name}`);
+      console.log(`📁 Archivo: ${track.audioFile}`);
+      console.log(`🔊 Volumen: ${Math.round(track.volume * 100)}%`);
+    } else {
+      console.log(`⏸ Pausando track: ${track.name}`);
+    }
+    
+    return newTracks;
+  });
+};
+

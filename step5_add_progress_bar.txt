@@ -1,0 +1,41 @@
+// PASO 5: Agregar barra de progreso después de headerCenter (línea 1192)
+        <View style={styles.headerCenter}>
+          <TouchableOpacity style={[styles.controlButton, styles.rewindButton]}>
+            <Text style={styles.controlIcon}>⏮</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.playButton, isPlaying && styles.playButtonActive]} onPress={handlePlayPause}>
+            <Text style={styles.playIcon}>{isPlaying ? '⏸' : '▶'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.controlButton, styles.stopButton]}>
+            <Text style={styles.controlIcon}>⏹</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.controlButton, styles.forwardButton]}>
+            <Text style={styles.controlIcon}>⏭</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.controlButton, styles.loopButton]}>
+            <Text style={styles.controlIcon}>⟲</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.controlButton, styles.shuffleButton]}>
+            <Text style={styles.controlIcon}>⇄</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Barra de Progreso */}
+        <View style={styles.progressContainer}>
+          <Text style={styles.progressText}>
+            {Math.floor(progress / 60)}:{(progress % 60).toString().padStart(2, '0')} / 
+            {Math.floor(duration / 60)}:{(duration % 60).toString().padStart(2, '0')}
+          </Text>
+          <View style={styles.progressBar}>
+            <View 
+              style={[
+                styles.progressFill, 
+                { width: `${(progress / duration) * 100}%` }
+              ]} 
+            />
+          </View>
+        </View>
+
+
+
+

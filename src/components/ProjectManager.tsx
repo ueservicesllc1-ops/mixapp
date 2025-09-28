@@ -90,7 +90,6 @@ const ProjectManager: React.FC<ProjectManagerProps> = ({ onProjectSelect, onSetl
       };
 
       const setlistId = await firestoreService.createSetlist(setlistData);
-      Alert.alert('Éxito', 'Setlist creado correctamente');
       
       setNewSetlistName('');
       setShowNewSetlistModal(false);

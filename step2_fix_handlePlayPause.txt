@@ -1,0 +1,23 @@
+// PASO 2: Reemplazar función handlePlayPause (líneas 122-146)
+const handlePlayPause = () => {
+  const newPlayingState = !isPlaying;
+  setIsPlaying(newPlayingState);
+  
+  // Controlar todos los tracks sincronizados
+  setTracks(prevTracks => {
+    return prevTracks.map(track => ({
+      ...track,
+      playing: newPlayingState
+    }));
+  });
+  
+  if (newPlayingState) {
+    console.log('🎵 Reproduciendo todos los tracks sincronizados');
+    // Iniciar barra de progreso
+    setProgress(0);
+    setDuration(180); // 3 minutos por defecto
+  } else {
+    console.log('⏸ Pausando todos los tracks');
+  }
+};
+

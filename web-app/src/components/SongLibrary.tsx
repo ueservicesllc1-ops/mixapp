@@ -17,7 +17,16 @@ const SongLibrary: React.FC<SongLibraryProps> = ({ userId }) => {
   const [playingSong, setPlayingSong] = useState<string | null>(null);
 
   useEffect(() => {
-    loadUserLibrary();
+    if (userId) {
+      // Usar listener en tiempo real para actualizaciones automáticas
+      const unsubscribe = firestoreService.subscribeToUserLibrary(userId, (updatedSongs) => {
+        console.log('Library updated in real-time:', updatedSongs);
+        setSongs(updatedSongs);
+        setLoading(false);
+      });
+
+      return () => unsubscribe();
+    }
   }, [userId]);
 
   const loadUserLibrary = async () => {
@@ -43,15 +52,18 @@ const SongLibrary: React.FC<SongLibraryProps> = ({ userId }) => {
   };
 
   const handleDeleteSong = async (songId: string) => {
-    if (window.confirm('¿Estás seguro de que quieres eliminar esta canción?')) {
+    if (window.confirm('¿Estás seguro de que quieres eliminar esta canción? Esta acción no se puede deshacer.')) {
       try {
-        // Note: You'll need to implement deleteSong in firestoreService
-        // await firestoreService.deleteSong(songId);
-        console.log('Delete song:', songId);
-        // Reload songs after deletion
-        loadUserLibrary();
+        setLoading(true);
+        console.log('Deleting song:', songId);
+        await firestoreService.deleteSongFromLibrary(songId);
+        console.log('Song deleted successfully');
+        // No necesitamos recargar manualmente, el listener en tiempo real se encargará
       } catch (error) {
         console.error('Error deleting song:', error);
+        alert('Error al eliminar la canción. Inténtalo de nuevo.');
+      } finally {
+        setLoading(false);
       }
     }
   };

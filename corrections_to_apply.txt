@@ -1,0 +1,15 @@
+CORRECCIONES PARA MainScreen.tsx:
+
+1. AGREGAR después de línea 52:
+  const [progress, setProgress] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
+
+2. REEMPLAZAR función handlePlayPause (líneas 122-146)
+
+3. REEMPLAZAR función toggleTrackPlay (líneas 398-430)
+
+4. AGREGAR useEffect para barra de progreso
+
+5. AGREGAR estilos para barra de progreso
+

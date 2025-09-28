@@ -1,0 +1,58 @@
+CORRECCIONES PARA APLICAR EN MainScreen.tsx:
+
+1. DESPUÉS DE LA LÍNEA 52, AGREGAR:
+  const [progress, setProgress] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
+
+2. REEMPLAZAR LÍNEAS 122-146 (handlePlayPause):
+const handlePlayPause = () => {
+  const newPlayingState = !isPlaying;
+  setIsPlaying(newPlayingState);
+  
+  // Controlar todos los tracks sincronizados
+  setTracks(prevTracks => {
+    return prevTracks.map(track => ({
+      ...track,
+      playing: newPlayingState
+    }));
+  });
+  
+  if (newPlayingState) {
+    console.log('🎵 Reproduciendo todos los tracks sincronizados');
+    // Iniciar barra de progreso
+    setProgress(0);
+    setDuration(180); // 3 minutos por defecto
+  } else {
+    console.log('⏸ Pausando todos los tracks');
+  }
+};
+
+3. REEMPLAZAR LÍNEAS 398-430 (toggleTrackPlay):
+const toggleTrackPlay = (trackIndex: number) => {
+  console.log(`Toggle play para track ${trackIndex}`);
+  
+  setTracks(prevTracks => {
+    const newTracks = [...prevTracks];
+    const track = newTracks[trackIndex];
+    
+    if (!track) return prevTracks;
+    
+    // CORRECCIÓN: Crear nuevo objeto
+    newTracks[trackIndex] = {
+      ...track,
+      playing: !track.playing
+    };
+    
+    if (newTracks[trackIndex].playing) {
+      console.log(`🎵 Reproduciendo track: ${track.name}`);
+      console.log(`📁 Archivo: ${track.audioFile}`);
+      console.log(`🔊 Volumen: ${Math.round(track.volume * 100)}%`);
+    } else {
+      console.log(`⏸ Pausando track: ${track.name}`);
+    }
+    
+    return newTracks;
+  });
+};
+

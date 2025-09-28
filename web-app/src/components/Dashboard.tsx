@@ -4,18 +4,122 @@
 
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { Upload, Music, BarChart3, Settings } from 'lucide-react';
+import { Upload, Music, BarChart3, Settings, Monitor } from 'lucide-react';
 import Header from './Header';
 import FileUpload from './FileUpload';
 import SongLibrary from './SongLibrary';
+import LEDScreenUpload from './LEDScreenUpload';
+import LEDDisplay from './LEDDisplay';
+import NewSongUpload from './NewSongUpload';
+import NewSongsLibrary from './NewSongsLibrary';
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'upload' | 'library' | 'analytics'>('upload');
+  const [activeTab, setActiveTab] = useState<'upload' | 'library' | 'songs' | 'newsongs' | 'led-screen' | 'analytics'>('upload');
+  const [showUploadForm, setShowUploadForm] = useState(false);
+  const [showNewSongForm, setShowNewSongForm] = useState(false);
+  const [songTitle, setSongTitle] = useState('');
+  const [artistName, setArtistName] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [songs, setSongs] = useState<Array<{
+    id: string;
+    title: string;
+    artist: string;
+    fileName: string;
+    fileSize: number;
+    uploadPath: string;
+    uploadDate: string;
+    folder?: string;
+  }>>([]);
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      console.log('Archivo seleccionado:', file.name, file.size, 'bytes');
+    }
+  };
+
+  const handleUploadSong = async () => {
+    try {
+      if (!songTitle || !artistName || !selectedFile) {
+        alert('Por favor completa todos los campos y selecciona un archivo');
+        return;
+      }
+
+      // Generar ID único para la canción
+      const songId = `song_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Construir la ruta donde se subirá
+      const uploadPath = `canciones/${songId}/`;
+      const fullPath = `https://mixercur.s3.us-east-005.backblazeb2.com/${uploadPath}`;
+      
+      console.log(`🎵 Subiendo canción: ${artistName} - ${songTitle}`);
+      console.log(`📁 Archivo: ${selectedFile.name} (${(selectedFile.size / 1024 / 1024).toFixed(2)} MB)`);
+      console.log(`📁 Ruta de subida: ${fullPath}`);
+      console.log(`🆔 ID de canción: ${songId}`);
+      
+      // Subir archivo directamente a B2
+      const AWS = require('aws-sdk');
+      
+      const s3 = new AWS.S3({
+        endpoint: 'https://s3.us-east-005.backblazeb2.com',
+        accessKeyId: '005c2b526be0baa0000000011',
+        secretAccessKey: 'K005LMrcuASqx5cA35/nlvZg63lHeS4',
+        region: 'us-east-005',
+        s3ForcePathStyle: true
+      });
+      
+      const fileName = `canciones/${songId}/${selectedFile.name}`;
+      
+      const uploadParams = {
+        Bucket: 'mixercur',
+        Key: fileName,
+        Body: selectedFile,
+        ContentType: selectedFile.type,
+        ACL: 'public-read'
+      };
+      
+      console.log('📤 Subiendo directamente a B2...');
+      const result = await s3.upload(uploadParams).promise();
+      console.log('✅ Archivo subido a B2:', result.Location);
+      
+      // Mostrar éxito con la ruta real de B2
+      alert(
+        `✅ Canción Subida Exitosamente a B2\n\nArtista: ${artistName}\nCanción: ${songTitle}\nArchivo: ${selectedFile.name}\nTamaño: ${(selectedFile.size / 1024 / 1024).toFixed(2)} MB\n\n📁 Ruta real en B2:\n${result.Location}\n\n🆔 ID: ${songId}`
+      );
+      
+      // Agregar canción a la biblioteca
+      const newSong = {
+        id: songId,
+        title: songTitle,
+        artist: artistName,
+        fileName: selectedFile.name,
+        fileSize: selectedFile.size,
+        uploadPath: fullPath,
+        uploadDate: new Date().toLocaleString()
+      };
+      
+      setSongs(prev => [newSong, ...prev]);
+      
+      // Limpiar formulario
+      setShowUploadForm(false);
+      setSongTitle('');
+      setArtistName('');
+      setSelectedFile(null);
+      
+    } catch (error) {
+      console.error('❌ Error subiendo canción:', error);
+      alert('No se pudo subir la canción');
+    }
+  };
 
   const tabs = [
     { id: 'upload', label: 'Subir Canciones', icon: Upload },
     { id: 'library', label: 'Biblioteca', icon: Music },
+    { id: 'songs', label: 'Mis Canciones', icon: Music },
+    { id: 'newsongs', label: '🎵 Yo Sí Sé', icon: Music },
+    { id: 'led-screen', label: 'Pantalla LED', icon: Monitor },
     { id: 'analytics', label: 'Estadísticas', icon: BarChart3 },
   ];
 
@@ -50,6 +154,115 @@ const Dashboard: React.FC = () => {
               </p>
             </div>
             <SongLibrary userId={user?.uid || ''} />
+          </div>
+        );
+      
+      case 'songs':
+        return (
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-2xl font-bold text-white mb-2">🎵 Mis Canciones</h2>
+              <p className="text-dark-400">
+                Canciones individuales que has subido. Cada canción es un archivo único.
+              </p>
+            </div>
+            
+            {songs.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="text-6xl mb-4">🎵</div>
+                <h3 className="text-xl font-bold text-white mb-2">No hay canciones</h3>
+                <p className="text-dark-400 mb-4">Sube tu primera canción individual</p>
+                <button
+                  onClick={() => setShowUploadForm(true)}
+                  className="bg-primary-600 hover:bg-primary-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200"
+                >
+                  Subir Canción
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {songs.map((song) => (
+                  <div key={song.id} className="bg-dark-800 rounded-lg p-6 border border-dark-700">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2 mb-1">
+                          <h3 className="text-lg font-bold text-white">{song.title}</h3>
+                          {song.folder === 'newsongs' && (
+                            <span className="bg-green-600 text-white text-xs px-2 py-1 rounded-full font-medium">
+                              NEW
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-primary-400 font-medium">{song.artist}</p>
+                      </div>
+                      <div className="text-2xl">🎵</div>
+                    </div>
+                    
+                    <div className="space-y-2 text-sm text-dark-400 mb-4">
+                      <p><span className="font-medium">Archivo:</span> {song.fileName}</p>
+                      <p><span className="font-medium">Tamaño:</span> {(song.fileSize / 1024 / 1024).toFixed(2)} MB</p>
+                      <p><span className="font-medium">Subido:</span> {song.uploadDate}</p>
+                      {song.folder === 'newsongs' && (
+                        <p><span className="font-medium text-green-400">📂 Carpeta:</span> <span className="text-green-400">newsongs</span></p>
+                      )}
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <button 
+                        onClick={() => navigator.clipboard.writeText(song.uploadPath)}
+                        className="w-full bg-green-600 hover:bg-green-700 text-white text-sm font-medium py-2 px-3 rounded transition-colors duration-200"
+                      >
+                        📋 Copiar Ruta B2
+                      </button>
+                      <button 
+                        onClick={() => {
+                          const confirmDelete = window.confirm(`¿Eliminar "${song.title}" de la biblioteca?`);
+                          if (confirmDelete) {
+                            setSongs(prev => prev.filter(s => s.id !== song.id));
+                          }
+                        }}
+                        className="w-full bg-red-600 hover:bg-red-700 text-white text-sm font-medium py-2 px-3 rounded transition-colors duration-200"
+                      >
+                        🗑️ Eliminar
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      
+      case 'newsongs':
+        return (
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-2xl font-bold text-white mb-2">🎵 Yo Sí Sé - Canciones Nuevas</h2>
+              <p className="text-dark-400">
+                Canciones subidas usando el botón "YO SÍ SÉ". Se guardan en la carpeta "newsongs" de B2 y en la colección "newsongs" de Firestore.
+              </p>
+            </div>
+            <NewSongsLibrary />
+          </div>
+        );
+      
+      case 'led-screen':
+        return (
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-2xl font-bold text-white mb-2">Pantalla LED del Mixer</h2>
+              <p className="text-dark-400">
+                Sube y gestiona imágenes para mostrar en la pantalla LED del mixer durante las presentaciones.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <LEDScreenUpload 
+                onUploadComplete={() => {
+                  console.log('LED image upload completed');
+                }}
+              />
+              <LEDDisplay />
+            </div>
           </div>
         );
       
@@ -137,9 +350,93 @@ const Dashboard: React.FC = () => {
           </nav>
         </div>
 
+        {/* BOTÓN CENTRAL "YO SÍ SÉ" */}
+        <div className="flex justify-center items-center py-12">
+          <button
+            onClick={() => setShowNewSongForm(true)}
+            className="bg-gradient-to-r from-green-500 to-blue-600 hover:from-green-600 hover:to-blue-700 text-white font-bold py-6 px-12 rounded-lg text-2xl shadow-lg transition-all duration-300 transform hover:scale-105"
+          >
+            🎵 YO SÍ SÉ 🎵
+          </button>
+        </div>
+
         {/* Tab Content */}
         {renderTabContent()}
       </main>
+
+      {/* Upload Form Modal */}
+      {showUploadForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-dark-800 rounded-lg p-6 w-full max-w-md mx-4">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold text-white">🎵 Subir Canción</h2>
+              <button
+                onClick={() => setShowUploadForm(false)}
+                className="text-gray-400 hover:text-white text-2xl"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-white font-bold mb-2">Nombre del Artista:</label>
+                <input
+                  type="text"
+                  value={artistName}
+                  onChange={(e) => setArtistName(e.target.value)}
+                  placeholder="Ej: Juan Pérez"
+                  className="w-full bg-gray-700 text-white p-3 rounded-lg border border-gray-600 focus:border-primary-500 focus:outline-none"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-white font-bold mb-2">Título de la Canción:</label>
+                <input
+                  type="text"
+                  value={songTitle}
+                  onChange={(e) => setSongTitle(e.target.value)}
+                  placeholder="Ej: Mi Nueva Canción"
+                  className="w-full bg-gray-700 text-white p-3 rounded-lg border border-gray-600 focus:border-primary-500 focus:outline-none"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-white font-bold mb-2">Archivo de Audio:</label>
+                <input
+                  type="file"
+                  accept=".wav,.mp3,.m4a,.aac"
+                  onChange={handleFileSelect}
+                  className="w-full bg-gray-700 text-white p-3 rounded-lg border border-gray-600 focus:border-primary-500 focus:outline-none"
+                />
+                {selectedFile && (
+                  <p className="text-green-400 text-sm mt-2">
+                    ✅ Archivo seleccionado: {selectedFile.name} ({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)
+                  </p>
+                )}
+              </div>
+              
+              <button
+                onClick={handleUploadSong}
+                className="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-lg transition-colors duration-200"
+              >
+                🚀 Subir a B2
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* New Song Upload Modal */}
+      <NewSongUpload 
+        isOpen={showNewSongForm}
+        onClose={() => setShowNewSongForm(false)}
+        onUploadComplete={(songData) => {
+          // Agregar la nueva canción a la lista local
+          setSongs(prev => [songData, ...prev]);
+          console.log('Nueva canción agregada:', songData);
+        }}
+      />
     </div>
   );
 };

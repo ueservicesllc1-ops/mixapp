@@ -1,0 +1,22 @@
+// PASO 4: Agregar useEffect para barra de progreso (después de otros useEffect)
+// Función para actualizar progreso
+const updateProgress = () => {
+  if (isPlaying && progress < duration) {
+    setProgress(prev => prev + 1);
+  }
+};
+
+// useEffect para barra de progreso
+useEffect(() => {
+  let interval: NodeJS.Timeout;
+  if (isPlaying) {
+    interval = setInterval(updateProgress, 1000); // Actualizar cada segundo
+  }
+  return () => {
+    if (interval) clearInterval(interval);
+  };
+}, [isPlaying, progress, duration]);
+
+
+
+
