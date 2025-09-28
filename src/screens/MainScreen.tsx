@@ -1593,7 +1593,9 @@ const MainScreen: React.FC = () => {
                             
                             // Si la URL es relativa, convertirla a URL completa de B2
                             if (downloadUrl.startsWith('/mixercur/')) {
-                              downloadUrl = `https://mixercur.s3.us-east-005.backblazeb2.com${downloadUrl}`;
+                              // Remover el /mixercur/ duplicado
+                              const cleanPath = downloadUrl.replace('/mixercur/', '');
+                              downloadUrl = `https://mixercur.s3.us-east-005.backblazeb2.com/${cleanPath}`;
                               console.log('🔗 URL convertida a completa:', downloadUrl);
                             }
                             
