@@ -1568,7 +1568,7 @@ const MainScreen: React.FC = () => {
                             }
                           
                             // Descarga con ReactNativeBlobUtil pero simplificada
-                            const downloadUrl = song.b2Url || song.audioFile || song.downloadUrl || song.url || song.fileUrl || '';
+                            let downloadUrl = song.b2Url || song.audioFile || song.downloadUrl || song.url || song.fileUrl || '';
                             
                             console.log('🔍 URLs disponibles:', {
                               b2Url: song.b2Url,
@@ -1589,6 +1589,12 @@ const MainScreen: React.FC = () => {
                               };
                               console.error('❌ No se encontró URL válida. URLs disponibles:', availableUrls);
                               throw new Error(`No se encontró URL de descarga válida para "${song.title}". URLs disponibles: ${JSON.stringify(availableUrls)}`);
+                            }
+                            
+                            // Si la URL es relativa, convertirla a URL completa de B2
+                            if (downloadUrl.startsWith('/mixercur/')) {
+                              downloadUrl = `https://mixercur.s3.us-east-005.backblazeb2.com${downloadUrl}`;
+                              console.log('🔗 URL convertida a completa:', downloadUrl);
                             }
                             
                             console.log('📥 Descargando desde:', downloadUrl);
