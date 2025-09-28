@@ -1597,6 +1597,9 @@ const MainScreen: React.FC = () => {
                               const cleanPath = downloadUrl.replace('/mixercur/', '');
                               downloadUrl = `https://mixercur.s3.us-east-005.backblazeb2.com/${cleanPath}`;
                               console.log('🔗 URL convertida a completa:', downloadUrl);
+                            } else if (downloadUrl.startsWith('https://')) {
+                              // URL ya es completa, usar directamente
+                              console.log('🔗 URL ya es completa:', downloadUrl);
                             }
                             
                             console.log('📥 Descargando desde:', downloadUrl);

@@ -97,7 +97,8 @@ const NewSongUpload: React.FC<NewSongUploadProps> = ({ isOpen, onClose, onUpload
         uploadPath: `newsongs/${songId}/${selectedFile.name}`,
         ownerId: user.uid,
         folder: 'newsongs',
-        b2Url: downloadUrl
+        b2Url: downloadUrl, // URL completa de B2
+        audioFile: downloadUrl // También guardar como audioFile para compatibilidad
       });
       
       console.log('✅ Información guardada en Firestore con ID:', firestoreSongId);
