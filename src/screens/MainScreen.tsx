@@ -1599,6 +1599,18 @@ const MainScreen: React.FC = () => {
                             
                             console.log('📥 Descargando desde:', downloadUrl);
                             
+                            // Verificar si la URL es accesible antes de descargar
+                            try {
+                              const testResponse = await fetch(downloadUrl, { method: 'HEAD' });
+                              console.log('🔍 Test HEAD request status:', testResponse.status);
+                              console.log('🔍 Test HEAD request headers:', {
+                                'content-length': testResponse.headers.get('content-length'),
+                                'content-type': testResponse.headers.get('content-type')
+                              });
+                            } catch (testError) {
+                              console.log('⚠️ Error verificando URL:', testError);
+                            }
+                            
                             // Configuración mínima para descarga
                             const { config } = ReactNativeBlobUtil;
                             const downloadsPath = `${RNFS.ExternalStorageDirectoryPath}/Download`;
@@ -1615,6 +1627,25 @@ const MainScreen: React.FC = () => {
                             const response = await downloadConfig.fetch('GET', downloadUrl);
                             
                             console.log('✅ Descarga completada:', response.path());
+                            console.log('📊 Response info:', {
+                              status: response.info().status,
+                              headers: response.info().headers,
+                              path: response.path()
+                            });
+                            
+                            // Verificar el tamaño del archivo descargado
+                            try {
+                              const fileExists = await RNFS.exists(response.path());
+                              if (fileExists) {
+                                const stats = await RNFS.stat(response.path());
+                                console.log('📁 Archivo descargado - Tamaño:', stats.size, 'bytes');
+                                if (stats.size < 1000) {
+                                  console.log('⚠️ Archivo muy pequeño, posible error en descarga');
+                                }
+                              }
+                            } catch (fileError) {
+                              console.log('❌ Error verificando archivo:', fileError);
+                            }
                             
                             // Guardar metadatos en Firestore para acceso posterior
                             try {
