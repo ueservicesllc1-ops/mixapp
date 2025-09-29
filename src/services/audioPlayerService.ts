@@ -43,57 +43,20 @@ class AudioPlayerService {
     this.clearSounds();
     this.currentSong = null;
     
-    // Si la canción ya tiene tracks definidos, usarlos
-    if (song.tracks && song.tracks.length > 0) {
-      console.log('📚 Usando tracks de Firebase:', song.tracks.length);
-      console.log('🎵 Tracks de Firebase:', song.tracks.map(t => ({ name: t.name, downloadUrl: t.downloadUrl })));
-      
-      // Convertir los tracks de Firebase al formato AudioTrack
-      const audioTracks: AudioTrack[] = song.tracks.map((track, index) => {
-        // Construir URL completa si es relativa
-        let fullUrl = track.downloadUrl;
-        if (fullUrl.startsWith('/mixercur/')) {
-          fullUrl = `https://mixercur.s3.us-east-005.backblazeb2.com${fullUrl}`;
-        }
-        
-        const trackId = `track_${index}`;
-        console.log(`🔗 Track ${index} URL original:`, track.downloadUrl);
-        console.log(`🔗 Track ${index} URL completa:`, fullUrl);
-        console.log(`🎵 Track ${index} ID generado:`, trackId);
-        console.log(`🎵 Track ${index} nombre:`, track.name);
-        
-        return {
-          id: trackId,
-          name: track.name,
-          fileUrl: fullUrl,
-          localPath: fullUrl,
-          volume: 50,
-          muted: false
-        };
-      });
-      
-      console.log('🎵 AudioTracks convertidos:', audioTracks.map(t => ({ name: t.name, fileUrl: t.fileUrl })));
-      
-      this.currentSong = song;
-      await this.loadTracks(audioTracks);
-      return;
-    }
-    
-    // Si no tiene tracks, buscar en Downloads
-    console.log('🔍 Buscando tracks en Downloads...');
+    // Buscar tracks en almacenamiento local del emulador
+    console.log('🔍 Buscando tracks en almacenamiento local...');
     const tracks = await this.findTracksInDownloads(song);
     
     if (tracks.length === 0) {
-      throw new Error('No se encontraron tracks para esta canción');
+      throw new Error('No se encontraron tracks para esta canción en almacenamiento local');
     }
     
-    // Actualizar la canción con los tracks encontrados
     this.currentSong = {
       ...song,
       tracks: tracks
     };
     
-    console.log('🎵 Canción actualizada con tracks:', this.currentSong.title);
+    console.log('🎵 Canción actualizada con tracks locales:', this.currentSong.title);
     await this.loadTracks(tracks);
   }
 
