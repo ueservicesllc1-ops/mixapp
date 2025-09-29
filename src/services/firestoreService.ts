@@ -253,31 +253,77 @@ class FirestoreService {
 
   // Song Operations
   async addSongToSetlist(setlistId: string, song: Omit<Song, 'id'>): Promise<string> {
-    const docRef = await addDoc(collection(this.db, 'setlists', setlistId, 'songs'), song);
-    return docRef.id;
+    console.log('🔥 addSongToSetlist llamada');
+    console.log('🔥 Setlist ID:', setlistId);
+    console.log('🔥 Song data:', JSON.stringify(song, null, 2));
+    
+    try {
+      const collectionRef = collection(this.db, 'setlists', setlistId, 'songs');
+      console.log('🔥 Collection reference creada');
+      
+      const docRef = await addDoc(collectionRef, song);
+      console.log('🔥 Documento agregado con ID:', docRef.id);
+      
+      // Verificar que se guardó correctamente
+      const verifySnapshot = await getDocs(collectionRef);
+      console.log('🔥 Verificación: documentos en colección:', verifySnapshot.docs.length);
+      
+      return docRef.id;
+    } catch (error) {
+      console.error('❌ Error en addSongToSetlist:', error);
+      throw error;
+    }
   }
 
   async getSetlistSongs(setlistId: string): Promise<Song[]> {
     console.log('🔍 getSetlistSongs llamada con setlistId:', setlistId);
-    const q = query(
-      collection(this.db, 'setlists', setlistId, 'songs'),
-      orderBy('order')
-    );
-    const snapshot = await getDocs(q);
     
-    console.log('📊 Documentos encontrados en setlist:', snapshot.docs.length);
-    
-    const songs = snapshot.docs.map(doc => {
-      const data = doc.data();
-      console.log('🎵 Canción encontrada:', { id: doc.id, title: data.title, order: data.order });
-      return {
-        id: doc.id,
-        ...data,
-      };
-    }) as Song[];
-    
-    console.log('📚 Total canciones retornadas:', songs.length);
-    return songs;
+    try {
+      // Primero intentar con orderBy
+      const q = query(
+        collection(this.db, 'setlists', setlistId, 'songs'),
+        orderBy('order')
+      );
+      const snapshot = await getDocs(q);
+      
+      console.log('📊 Documentos encontrados en setlist:', snapshot.docs.length);
+      
+      if (snapshot.docs.length > 0) {
+        const songs = snapshot.docs.map(doc => {
+          const data = doc.data();
+          console.log('🎵 Canción encontrada:', { id: doc.id, title: data.title, order: data.order });
+          return {
+            id: doc.id,
+            ...data,
+          };
+        }) as Song[];
+        
+        console.log('📚 Total canciones retornadas:', songs.length);
+        return songs;
+      } else {
+        // Si no hay canciones con order, intentar sin orderBy
+        console.log('🔄 Intentando sin orderBy...');
+        const q2 = query(collection(this.db, 'setlists', setlistId, 'songs'));
+        const snapshot2 = await getDocs(q2);
+        
+        console.log('📊 Documentos sin orderBy:', snapshot2.docs.length);
+        
+        const songs = snapshot2.docs.map(doc => {
+          const data = doc.data();
+          console.log('🎵 Canción encontrada (sin order):', { id: doc.id, title: data.title });
+          return {
+            id: doc.id,
+            ...data,
+          };
+        }) as Song[];
+        
+        console.log('📚 Total canciones retornadas (sin order):', songs.length);
+        return songs;
+      }
+    } catch (error) {
+      console.error('❌ Error en getSetlistSongs:', error);
+      return [];
+    }
   }
 
   // Real-time listeners
@@ -571,6 +617,84 @@ class FirestoreService {
       await deleteDoc(songRef);
     } catch (error) {
       console.error('Error deleting downloaded song:', error);
+      throw error;
+    }
+  }
+
+  // Método para obtener multitracks del usuario
+  async getUserMultitracks(userId: string): Promise<any[]> {
+    try {
+      console.log('🔍 Buscando multitracks para userId:', userId);
+      
+      // Primero intentar sin orderBy para evitar problemas de índice
+      const q = query(
+        collection(firestore(), 'multitracks'),
+        where('ownerId', '==', userId)
+      );
+      
+      console.log('🔍 Ejecutando consulta...');
+      const snapshot = await getDocs(q);
+      console.log('🔍 Snapshot obtenido, docs:', snapshot.docs.length);
+      
+      const multitracks = snapshot.docs.map(doc => {
+        const data = doc.data();
+        console.log('🔍 Documento multitrack:', doc.id, data);
+        return {
+          id: doc.id,
+          ...data
+        };
+      });
+      
+      console.log('🔍 Multitracks procesados:', multitracks.length);
+      return multitracks;
+    } catch (error) {
+      console.error('❌ Error getting user multitracks:', error);
+      console.error('❌ Error details:', error);
+      return [];
+    }
+  }
+
+  // Método para obtener setlists del usuario
+  async getUserSetlists(userId: string): Promise<any[]> {
+    try {
+      console.log('📋 Buscando setlists para userId:', userId);
+      
+      const q = query(
+        collection(firestore(), 'setlists'),
+        where('ownerId', '==', userId)
+      );
+      
+      console.log('📋 Ejecutando consulta de setlists...');
+      const snapshot = await getDocs(q);
+      console.log('📋 Snapshot obtenido, docs:', snapshot.docs.length);
+      
+      const setlists = snapshot.docs.map(doc => {
+        const data = doc.data();
+        console.log('📋 Documento setlist:', doc.id, data);
+        return {
+          id: doc.id,
+          ...data
+        };
+      });
+      
+      console.log('📋 Setlists procesados:', setlists.length);
+      return setlists;
+    } catch (error) {
+      console.error('❌ Error getting user setlists:', error);
+      console.error('❌ Error details:', error);
+      return [];
+    }
+  }
+
+  // Método para eliminar setlist
+  async deleteSetlist(setlistId: string): Promise<void> {
+    try {
+      console.log('🗑️ Eliminando setlist:', setlistId);
+      const setlistRef = doc(firestore(), 'setlists', setlistId);
+      await deleteDoc(setlistRef);
+      console.log('✅ Setlist eliminado exitosamente');
+    } catch (error) {
+      console.error('❌ Error deleting setlist:', error);
       throw error;
     }
   }

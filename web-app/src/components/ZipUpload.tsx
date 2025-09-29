@@ -1,442 +1,377 @@
 /**
- * ZipUpload - Component for uploading ZIP files with multitrack songs
- * Similar to Looommunity workflow
+ * ZipUpload - Componente para subir y procesar archivos ZIP con tracks de audio
  */
 
-import React, { useState, useCallback } from 'react';
-import { useDropzone } from 'react-dropzone';
-import { Upload, Music, Save, X, Edit3, FileArchive } from 'lucide-react';
-import JSZip from 'jszip';
+import React, { useState } from 'react';
+import { Upload, Music, Edit3, Save, X } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 import realB2Service from '../services/realB2Service';
 import firestoreService from '../services/firestoreService';
+import JSZip from 'jszip';
 
-interface ZipUploadProps {
-  userId: string;
-  onUploadComplete?: () => void;
-}
-
-interface TrackFile {
+interface Track {
   name: string;
   file: File;
-  size: number;
-  type: string;
+  editedName: string;
 }
 
-interface SongMetadata {
-  title: string;
+interface MultitrackData {
+  songName: string;
   artist: string;
   tempo: number;
   key: string;
   timeSignature: string;
+  tracks: Track[];
 }
 
-const ZipUpload: React.FC<ZipUploadProps> = ({ userId, onUploadComplete }) => {
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  const [tracks, setTracks] = useState<TrackFile[]>([]);
-  const [songMetadata, setSongMetadata] = useState<SongMetadata>({
-    title: '',
+const ZipUpload: React.FC = () => {
+  const { user } = useAuth();
+  const [zipFile, setZipFile] = useState<File | null>(null);
+  const [tracks, setTracks] = useState<Track[]>([]);
+  const [multitrackData, setMultitrackData] = useState<MultitrackData>({
+    songName: '',
     artist: '',
     tempo: 120,
     key: 'C',
-    timeSignature: '4/4'
+    timeSignature: '4/4',
+    tracks: []
   });
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
-  const onDrop = useCallback(async (acceptedFiles: File[]) => {
-    const zipFile = acceptedFiles.find(file => file.name.toLowerCase().endsWith('.zip'));
-    if (!zipFile) {
-      alert('Por favor selecciona un archivo ZIP');
+  const handleZipUpload = async (file: File) => {
+    if (!file.name.toLowerCase().endsWith('.zip')) {
+      alert('Por favor selecciona un archivo ZIP válido');
       return;
     }
 
     setIsProcessing(true);
     try {
       const zip = new JSZip();
-      const zipContent = await zip.loadAsync(zipFile);
+      const zipContent = await zip.loadAsync(file);
       
-      const audioTracks: TrackFile[] = [];
-      
-      // Procesar cada archivo en el ZIP
-      for (const [relativePath, zipEntry] of Object.entries(zipContent.files)) {
-        if (!zipEntry.dir && isAudioFile(relativePath)) {
-          const file = await zipEntry.async('blob');
-          const trackFile = new File([file], relativePath, { type: getAudioMimeType(relativePath) });
+      const audioFiles: Track[] = [];
+      const audioExtensions = ['.wav', '.mp3', '.aiff', '.flac', '.m4a'];
+
+      for (const [filename, zipEntry] of Object.entries(zipContent.files)) {
+        if (!zipEntry.dir && audioExtensions.some(ext => filename.toLowerCase().endsWith(ext))) {
+          const blob = await zipEntry.async('blob');
+          const file = new File([blob], filename, { type: 'audio/wav' });
           
-          audioTracks.push({
-            name: getTrackName(relativePath),
-            file: trackFile,
-            size: trackFile.size,
-            type: trackFile.type
+          audioFiles.push({
+            name: filename,
+            file: file,
+            editedName: filename.replace(/\.[^/.]+$/, '') // Remover extensión
           });
         }
       }
 
-      setTracks(audioTracks);
-      
-      // Auto-completar metadatos desde el nombre del ZIP
-      const zipName = zipFile.name.replace('.zip', '');
-      const parts = zipName.split(' - ');
-      setSongMetadata(prev => ({
+      setTracks(audioFiles);
+      setMultitrackData(prev => ({
         ...prev,
-        title: parts[1] || zipName,
-        artist: parts[0] || 'Unknown'
+        tracks: audioFiles
       }));
-
+      
+      console.log(`Se encontraron ${audioFiles.length} archivos de audio en el ZIP`);
     } catch (error) {
-      console.error('Error processing ZIP:', error);
+      console.error('Error procesando ZIP:', error);
       alert('Error al procesar el archivo ZIP');
     } finally {
       setIsProcessing(false);
     }
-  }, []);
-
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: {
-      'application/zip': ['.zip']
-    },
-    multiple: false
-  });
-
-  const isAudioFile = (filename: string) => {
-    const audioExtensions = ['.mp3', '.wav', '.m4a', '.aac', '.ogg', '.flac'];
-    return audioExtensions.some(ext => filename.toLowerCase().endsWith(ext));
-  };
-
-  const getAudioMimeType = (filename: string) => {
-    const ext = filename.toLowerCase().split('.').pop();
-    const mimeTypes: { [key: string]: string } = {
-      'mp3': 'audio/mpeg',
-      'wav': 'audio/wav',
-      'm4a': 'audio/m4a',
-      'aac': 'audio/aac',
-      'ogg': 'audio/ogg',
-      'flac': 'audio/flac'
-    };
-    return mimeTypes[ext || ''] || 'audio/mpeg';
-  };
-
-  const getTrackName = (filename: string) => {
-    // Extraer nombre del track sin la extensión y rutas
-    let name = filename.split('/').pop() || filename;
-    name = name.replace(/\.[^/.]+$/, '');
-    
-    // Normalizar el nombre: eliminar tildes, espacios, caracteres especiales
-    name = name
-      .normalize('NFD') // Descomponer caracteres acentuados
-      .replace(/[\u0300-\u036f]/g, '') // Eliminar marcas diacríticas (tildes)
-      .replace(/[^a-zA-Z0-9]/g, '') // Eliminar todo excepto letras y números
-      .toUpperCase(); // Convertir a mayúsculas
-    
-    return name;
   };
 
   const updateTrackName = (index: number, newName: string) => {
-    // Normalizar el nombre ingresado por el usuario
-    const normalizedName = newName
-      .normalize('NFD') // Descomponer caracteres acentuados
-      .replace(/[\u0300-\u036f]/g, '') // Eliminar marcas diacríticas (tildes)
-      .replace(/[^a-zA-Z0-9]/g, '') // Eliminar todo excepto letras y números
-      .toUpperCase(); // Convertir a mayúsculas
+    const updatedTracks = [...tracks];
+    updatedTracks[index].editedName = newName;
+    setTracks(updatedTracks);
     
-    setTracks(prev => prev.map((track, i) => 
-      i === index ? { ...track, name: normalizedName } : track
-    ));
+    setMultitrackData(prev => ({
+      ...prev,
+      tracks: updatedTracks
+    }));
   };
 
-  const removeTrack = (index: number) => {
-    setTracks(prev => prev.filter((_, i) => i !== index));
-  };
+  const handleSave = async () => {
+    if (!user?.uid) {
+      alert('Debes estar autenticado para subir');
+      return;
+    }
 
-  const uploadSong = async () => {
-    if (tracks.length === 0 || !songMetadata.title || !songMetadata.artist) {
-      alert('Por favor completa todos los campos requeridos');
+    if (!multitrackData.songName || !multitrackData.artist || tracks.length === 0) {
+      alert('Por favor completa todos los campos y asegúrate de tener tracks');
       return;
     }
 
     setIsUploading(true);
+    setUploadProgress(0);
+
     try {
-      // Generar un ID único para esta canción
-      const songId = `song_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      console.log('Generated songId:', songId);
+      // Crear carpeta en B2 para el multitrack
+      const folderName = `multitracks/${user.uid}/${Date.now()}_${multitrackData.songName.replace(/[^a-zA-Z0-9]/g, '_')}`;
       
-      // Subir cada track a B2 en la carpeta de la canción
       const uploadedTracks = [];
-      for (const track of tracks) {
-        console.log(`Uploading track: ${track.name} to song folder: ${songId}`);
-        const downloadURL = await realB2Service.uploadAudioFile(
-          track.file, 
-          userId, 
-          undefined, 
-          songId, 
-          track.name
-        );
+      const totalTracks = tracks.length;
+
+      // Subir cada track
+      for (let i = 0; i < tracks.length; i++) {
+        const track = tracks[i];
+        const trackPath = `${folderName}/${track.editedName}.wav`;
+        
+        console.log(`Subiendo track ${i + 1}/${totalTracks}: ${track.editedName}`);
+        
+        const downloadUrl = await realB2Service.uploadAudioFile(track.file, trackPath);
+        
         uploadedTracks.push({
-          name: track.name,
-          audioFile: downloadURL,
-          size: track.size,
-          type: track.type
+          name: track.editedName,
+          originalName: track.name,
+          downloadUrl: downloadUrl,
+          fileSize: track.file.size
         });
+
+        setUploadProgress(((i + 1) / totalTracks) * 100);
       }
 
-      // Crear proyecto con todos los tracks
-      const projectData = {
-        name: songMetadata.title,
-        description: `${songMetadata.artist} - ${songMetadata.title}`,
-        ownerId: userId,
-        tracks: uploadedTracks.map((track, index) => ({
-          id: `track-${index}`,
-          name: track.name,
-          volume: 1,
-          muted: false,
-          solo: false,
-          audioFile: track.audioFile,
-          color: getRandomColor()
-        })),
-        bpm: songMetadata.tempo,
-        key: songMetadata.key
+      // Guardar en Firestore como multitrack
+      const multitrackDataToSave = {
+        songName: multitrackData.songName,
+        artist: multitrackData.artist,
+        tempo: multitrackData.tempo,
+        key: multitrackData.key,
+        timeSignature: multitrackData.timeSignature,
+        tracks: uploadedTracks,
+        folderPath: folderName,
+        ownerId: user.uid,
+        createdAt: new Date(),
+        type: 'multitrack'
       };
 
-      // Guardar proyecto
-      const projectId = await firestoreService.createProject(projectData);
-      console.log('Project created:', projectId);
-
-      // También guardar como canción en la biblioteca
-      const songData = {
-        title: songMetadata.title,
-        artist: songMetadata.artist,
-        key: songMetadata.key,
-        bpm: songMetadata.tempo,
-        timeSignature: songMetadata.timeSignature,
-        audioFile: uploadedTracks[0]?.audioFile || '', // URL del primer track
-        order: 0,
-        duration: 0,
-        fileSize: uploadedTracks.reduce((total, track) => total + track.size, 0),
-        uploadDate: new Date(),
-        ownerId: userId,
-        projectId: projectId, // Referencia al proyecto
-        tracks: uploadedTracks.map((track, index) => ({
-          name: track.name,
-          audioFile: track.audioFile,
-          size: track.size
-        }))
-      };
-
-      // Guardar en la biblioteca del usuario (colección songs)
-      await firestoreService.addSongToLibrary(userId, songData);
-      console.log('Song added to library:', songMetadata.title);
-
-      // Limpiar formulario
+      await firestoreService.addMultitrack(multitrackDataToSave);
+      
+      console.log('Multitrack guardado exitosamente');
+      alert('Multitrack subido exitosamente a la nube');
+      
+      // Reset form
       setTracks([]);
-      setSongMetadata({
-        title: '',
+      setMultitrackData({
+        songName: '',
         artist: '',
         tempo: 120,
         key: 'C',
-        timeSignature: '4/4'
+        timeSignature: '4/4',
+        tracks: []
       });
-
-      if (onUploadComplete) {
-        onUploadComplete();
-      }
-
-      alert('¡Canción multitrack subida exitosamente!');
-
+      setZipFile(null);
+      
     } catch (error) {
-      console.error('Error uploading song:', error);
-      alert('Error al subir la canción');
+      console.error('Error subiendo multitrack:', error);
+      alert('Error al subir el multitrack');
     } finally {
       setIsUploading(false);
+      setUploadProgress(0);
     }
-  };
-
-  const getRandomColor = () => {
-    const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8'];
-    return colors[Math.floor(Math.random() * colors.length)];
-  };
-
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
   return (
     <div className="space-y-6">
-      {/* Upload Area */}
-      <div
-        {...getRootProps()}
-        className={`
-          border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors duration-200
-          ${isDragActive 
-            ? 'border-primary-500 bg-primary-500/10' 
-            : 'border-dark-600 hover:border-primary-500 hover:bg-primary-500/5'
-          }
-          ${isProcessing || isUploading ? 'pointer-events-none opacity-50' : ''}
-        `}
-      >
-        <input {...getInputProps()} />
-        <div className="space-y-4">
-          <div className="flex justify-center">
-            <div className="bg-primary-600 p-4 rounded-full">
-              <FileArchive className="h-8 w-8 text-white" />
-            </div>
-          </div>
-          <div>
-            <h3 className="text-lg font-semibold text-white mb-2">
-              {isProcessing ? 'Procesando ZIP...' : 
-               isDragActive ? 'Suelta el archivo ZIP aquí' : 'Sube un archivo ZIP con tracks'}
-            </h3>
-            <p className="text-dark-400 mb-4">
-              Arrastra y suelta un archivo ZIP aquí, o haz clic para seleccionar
-            </p>
-            <p className="text-sm text-dark-500">
-              El ZIP debe contener archivos de audio (MP3, WAV, M4A, etc.)
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Song Metadata Form */}
-      {tracks.length > 0 && (
-        <div className="card">
-          <h4 className="text-lg font-semibold text-white mb-4 flex items-center">
-            <Music className="h-5 w-5 mr-2" />
-            Información de la Canción
-          </h4>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-            <div>
-              <label className="block text-sm text-dark-400 mb-2">Título *</label>
+      <div className="text-center">
+        <h2 className="text-2xl font-bold text-white mb-2">Subir a la nube</h2>
+        <p className="text-dark-400 mb-8">
+          Sube un archivo ZIP que contenga todos los archivos de audio de tu proyecto
+        </p>
+        
+        {/* Zona de subida de ZIP */}
+        {!zipFile && (
+          <div className="border-2 border-dashed border-gray-600 rounded-lg p-12 bg-gray-800/50 hover:bg-gray-800/70 transition-colors">
+            <div className="text-center">
+              <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+              <h3 className="text-lg font-medium text-white mb-2">
+                Arrastra tu archivo ZIP aquí
+              </h3>
+              <p className="text-gray-400 mb-4">
+                O haz clic para seleccionar un archivo
+              </p>
               <input
-                type="text"
-                value={songMetadata.title}
-                onChange={(e) => setSongMetadata(prev => ({ ...prev, title: e.target.value }))}
-                className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded text-white focus:outline-none focus:border-primary-500"
-                placeholder="Nombre de la canción"
+                type="file"
+                accept=".zip"
+                className="hidden"
+                id="zip-upload"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    setZipFile(file);
+                    handleZipUpload(file);
+                  }
+                }}
               />
-            </div>
-            
-            <div>
-              <label className="block text-sm text-dark-400 mb-2">Artista *</label>
-              <input
-                type="text"
-                value={songMetadata.artist}
-                onChange={(e) => setSongMetadata(prev => ({ ...prev, artist: e.target.value }))}
-                className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded text-white focus:outline-none focus:border-primary-500"
-                placeholder="Nombre del artista"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm text-dark-400 mb-2">Tempo (BPM)</label>
-              <input
-                type="number"
-                value={songMetadata.tempo}
-                onChange={(e) => setSongMetadata(prev => ({ ...prev, tempo: parseInt(e.target.value) || 120 }))}
-                className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded text-white focus:outline-none focus:border-primary-500"
-                min="60"
-                max="200"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm text-dark-400 mb-2">Tonalidad</label>
-              <select
-                value={songMetadata.key}
-                onChange={(e) => setSongMetadata(prev => ({ ...prev, key: e.target.value }))}
-                className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded text-white focus:outline-none focus:border-primary-500"
+              <label
+                htmlFor="zip-upload"
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 cursor-pointer"
               >
-                <option value="C">C</option>
-                <option value="C#">C#</option>
-                <option value="D">D</option>
-                <option value="D#">D#</option>
-                <option value="E">E</option>
-                <option value="F">F</option>
-                <option value="F#">F#</option>
-                <option value="G">G</option>
-                <option value="G#">G#</option>
-                <option value="A">A</option>
-                <option value="A#">A#</option>
-                <option value="B">B</option>
-              </select>
-            </div>
-            
-            <div>
-              <label className="block text-sm text-dark-400 mb-2">Compás</label>
-              <select
-                value={songMetadata.timeSignature}
-                onChange={(e) => setSongMetadata(prev => ({ ...prev, timeSignature: e.target.value }))}
-                className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded text-white focus:outline-none focus:border-primary-500"
-              >
-                <option value="4/4">4/4</option>
-                <option value="3/4">3/4</option>
-                <option value="2/4">2/4</option>
-                <option value="6/8">6/8</option>
-                <option value="12/8">12/8</option>
-              </select>
+                Seleccionar archivo ZIP
+              </label>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Tracks List */}
-      {tracks.length > 0 && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h4 className="text-lg font-semibold text-white flex items-center">
-              <Music className="h-5 w-5 mr-2" />
-              Tracks ({tracks.length})
-            </h4>
-            <button
-              onClick={uploadSong}
-              disabled={isUploading || !songMetadata.title || !songMetadata.artist}
-              className="bg-primary-600 hover:bg-primary-700 disabled:bg-dark-600 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg flex items-center space-x-2 transition-colors font-medium"
-            >
-              <Save className="h-4 w-4" />
-              <span>{isUploading ? 'Subiendo...' : 'Subir Canción'}</span>
-            </button>
+        {/* Procesando ZIP */}
+        {isProcessing && (
+          <div className="text-center py-8">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+            <p className="text-white">Procesando archivo ZIP...</p>
           </div>
+        )}
 
-          <div className="space-y-2">
-            {tracks.map((track, index) => (
-              <div key={index} className="card">
-                <div className="flex items-center space-x-4">
-                  <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-primary-600 rounded-full flex items-center justify-center">
-                      <span className="text-white text-sm font-medium">{index + 1}</span>
-                    </div>
-                  </div>
-                  
-                  <div className="flex-1">
-                    <input
-                      type="text"
-                      value={track.name}
-                      onChange={(e) => updateTrackName(index, e.target.value)}
-                      className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded text-white focus:outline-none focus:border-primary-500"
-                      placeholder="Nombre del track"
-                    />
-                  </div>
-                  
-                  <div className="flex items-center space-x-4 text-sm text-dark-400">
-                    <span>{track.type}</span>
-                    <span>{formatFileSize(track.size)}</span>
-                  </div>
-                  
-                  <button
-                    onClick={() => removeTrack(index)}
-                    className="text-dark-400 hover:text-red-400 p-2"
+        {/* Formulario de multitrack */}
+        {tracks.length > 0 && !isProcessing && (
+          <div className="max-w-4xl mx-auto">
+            <div className="bg-gray-800 rounded-lg p-6 mb-6">
+              <h3 className="text-xl font-bold text-white mb-4">Información del Proyecto</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Nombre de la Canción
+                  </label>
+                  <input
+                    type="text"
+                    value={multitrackData.songName}
+                    onChange={(e) => setMultitrackData(prev => ({ ...prev, songName: e.target.value }))}
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Nombre de la canción"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Artista
+                  </label>
+                  <input
+                    type="text"
+                    value={multitrackData.artist}
+                    onChange={(e) => setMultitrackData(prev => ({ ...prev, artist: e.target.value }))}
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Nombre del artista"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Tempo (BPM)
+                  </label>
+                  <input
+                    type="number"
+                    value={multitrackData.tempo}
+                    onChange={(e) => setMultitrackData(prev => ({ ...prev, tempo: parseInt(e.target.value) }))}
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="120"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Tono
+                  </label>
+                  <select
+                    value={multitrackData.key}
+                    onChange={(e) => setMultitrackData(prev => ({ ...prev, key: e.target.value }))}
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
-                    <X className="h-4 w-4" />
-                  </button>
+                    <option value="C">C</option>
+                    <option value="C#">C#</option>
+                    <option value="D">D</option>
+                    <option value="D#">D#</option>
+                    <option value="E">E</option>
+                    <option value="F">F</option>
+                    <option value="F#">F#</option>
+                    <option value="G">G</option>
+                    <option value="G#">G#</option>
+                    <option value="A">A</option>
+                    <option value="A#">A#</option>
+                    <option value="B">B</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Compás
+                  </label>
+                  <select
+                    value={multitrackData.timeSignature}
+                    onChange={(e) => setMultitrackData(prev => ({ ...prev, timeSignature: e.target.value }))}
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="4/4">4/4</option>
+                    <option value="3/4">3/4</option>
+                    <option value="2/4">2/4</option>
+                    <option value="6/8">6/8</option>
+                    <option value="12/8">12/8</option>
+                  </select>
                 </div>
               </div>
-            ))}
+            </div>
+
+            {/* Lista de tracks */}
+            <div className="bg-gray-800 rounded-lg p-6 mb-6">
+              <h3 className="text-xl font-bold text-white mb-4">Tracks de Audio ({tracks.length})</h3>
+              <div className="space-y-3">
+                {tracks.map((track, index) => (
+                  <div key={index} className="flex items-center space-x-4 bg-gray-700 p-3 rounded-md">
+                    <Music className="h-5 w-5 text-blue-400" />
+                    <div className="flex-1">
+                      <input
+                        type="text"
+                        value={track.editedName}
+                        onChange={(e) => updateTrackName(index, e.target.value)}
+                        className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Nombre del track"
+                      />
+                    </div>
+                    <span className="text-sm text-gray-400">
+                      {(track.file.size / 1024 / 1024).toFixed(2)} MB
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Botones de acción */}
+            <div className="flex justify-center space-x-4">
+              <button
+                onClick={() => {
+                  setTracks([]);
+                  setMultitrackData({
+                    songName: '',
+                    artist: '',
+                    tempo: 120,
+                    key: 'C',
+                    timeSignature: '4/4',
+                    tracks: []
+                  });
+                  setZipFile(null);
+                }}
+                className="flex items-center px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-md transition-colors"
+              >
+                <X className="h-4 w-4 mr-2" />
+                Cancelar
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={isUploading}
+                className="flex items-center px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-md transition-colors"
+              >
+                {isUploading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Subiendo... {uploadProgress.toFixed(0)}%
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4 mr-2" />
+                    Subir a la Nube
+                  </>
+                )}
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };

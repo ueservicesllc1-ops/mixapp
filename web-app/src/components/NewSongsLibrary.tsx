@@ -22,15 +22,35 @@ interface NewSong {
   status: string;
 }
 
+interface Multitrack {
+  id: string;
+  songName: string;
+  artist: string;
+  tempo: number;
+  key: string;
+  timeSignature: string;
+  tracks: Array<{
+    name: string;
+    originalName: string;
+    downloadUrl: string;
+    fileSize: number;
+  }>;
+  folderPath: string;
+  ownerId: string;
+  createdAt: any;
+  type: string;
+}
+
 const NewSongsLibrary: React.FC = () => {
   const { user } = useAuth();
   const [newSongs, setNewSongs] = useState<NewSong[]>([]);
+  const [multitracks, setMultitracks] = useState<Multitrack[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (user?.uid) {
-      loadUserNewSongs();
+      loadUserMultitracks();
     }
   }, [user?.uid]);
 
@@ -48,6 +68,17 @@ const NewSongsLibrary: React.FC = () => {
       setError('Error al cargar las canciones');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadUserMultitracks = async () => {
+    try {
+      const multitracks = await firestoreService.getUserMultitracks(user!.uid);
+      setMultitracks(multitracks);
+      
+      console.log('Multitracks cargados:', multitracks);
+    } catch (err) {
+      console.error('Error cargando multitracks:', err);
     }
   };
 
@@ -86,6 +117,37 @@ const NewSongsLibrary: React.FC = () => {
         console.error('Error al eliminar:', error);
         alert('Error al eliminar la canción');
       }
+    }
+  };
+
+  const handleDeleteMultitrack = async (multitrack: Multitrack) => {
+    const confirmDelete = window.confirm(
+      `¿Eliminar el multitrack "${multitrack.songName}"?\n\nEsto eliminará el registro de Firestore pero NO los archivos de B2.`
+    );
+    
+    if (confirmDelete) {
+      try {
+        await firestoreService.deleteMultitrack(multitrack.id);
+        setMultitracks(prev => prev.filter(m => m.id !== multitrack.id));
+        alert('Multitrack eliminado de la biblioteca');
+      } catch (error) {
+        console.error('Error al eliminar multitrack:', error);
+        alert('Error al eliminar el multitrack');
+      }
+    }
+  };
+
+  const handleDownloadMultitrack = async (multitrack: Multitrack) => {
+    try {
+      // Descargar todos los tracks del multitrack
+      multitrack.tracks.forEach((track, index) => {
+        setTimeout(() => {
+          window.open(track.downloadUrl, '_blank');
+        }, index * 500); // Descargar con 500ms de diferencia
+      });
+    } catch (error) {
+      console.error('Error al descargar multitrack:', error);
+      alert('Error al descargar el multitrack');
     }
   };
 
@@ -134,14 +196,14 @@ const NewSongsLibrary: React.FC = () => {
     );
   }
 
-  if (newSongs.length === 0) {
+  if (multitracks.length === 0) {
     return (
       <div className="text-center py-12">
-        <div className="text-6xl mb-4">🎵</div>
-        <h3 className="text-xl font-bold text-white mb-2">No hay canciones nuevas</h3>
-        <p className="text-dark-400 mb-4">Sube tu primera canción usando el botón "YO SÍ SÉ"</p>
+        <div className="text-6xl mb-4">🎛️</div>
+        <h3 className="text-xl font-bold text-white mb-2">No hay multitracks</h3>
+        <p className="text-dark-400 mb-4">Sube tu primer multitrack usando el botón "Subir a la nube"</p>
         <div className="text-sm text-gray-500">
-          Las canciones nuevas se guardan en la colección "newsongs" de Firestore
+          Los multitracks se guardan en la colección "multitracks" de Firestore
         </div>
       </div>
     );
@@ -151,11 +213,11 @@ const NewSongsLibrary: React.FC = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-xl font-bold text-white mb-1">🎵 Mis Canciones Nuevas</h3>
-          <p className="text-dark-400">Colección "newsongs" de Firestore</p>
+          <h3 className="text-xl font-bold text-white mb-1">🎛️ Mis Multitracks</h3>
+          <p className="text-dark-400">Colección "multitracks" de Firestore</p>
         </div>
         <button 
-          onClick={loadUserNewSongs}
+          onClick={loadUserMultitracks}
           className="text-primary-400 hover:text-primary-300 text-sm"
         >
           🔄 Actualizar
@@ -163,61 +225,75 @@ const NewSongsLibrary: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {newSongs.map((song) => (
-          <div key={song.id} className="bg-dark-800 rounded-lg p-6 border border-dark-700">
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex-1">
-                <div className="flex items-center space-x-2 mb-1">
-                  <h4 className="text-lg font-bold text-white">{song.title}</h4>
-                  <span className="bg-green-600 text-white text-xs px-2 py-1 rounded-full font-medium">
-                    NEW
-                  </span>
+        {multitracks.map((multitrack) => (
+              <div key={multitrack.id} className="bg-dark-800 rounded-lg p-6 border border-dark-700">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center space-x-3">
+                    <div className="bg-primary-600 p-2 rounded-lg">
+                      <Music className="h-5 w-5 text-white" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-white">{multitrack.songName}</h4>
+                      <p className="text-sm text-gray-400">{multitrack.artist}</p>
+                    </div>
+                  </div>
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => handleDownloadMultitrack(multitrack)}
+                      className="p-2 bg-green-600 hover:bg-green-700 rounded-lg text-white"
+                      title="Descargar todos los tracks"
+                    >
+                      <Download className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteMultitrack(multitrack)}
+                      className="p-2 bg-red-600 hover:bg-red-700 rounded-lg text-white"
+                      title="Eliminar multitrack"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
-                <p className="text-primary-400 font-medium">{song.artist}</p>
-              </div>
-              <div className="text-2xl">🎵</div>
-            </div>
-            
-            <div className="space-y-2 text-sm text-dark-400 mb-4">
-              <p><span className="font-medium">Archivo:</span> {song.fileName}</p>
-              <p><span className="font-medium">Tamaño:</span> {formatFileSize(song.fileSize)}</p>
-              <p><span className="font-medium">Subido:</span> {formatDate(song.uploadDate)}</p>
-              <p><span className="font-medium">Descargas:</span> {song.downloads}</p>
-              <p><span className="font-medium text-green-400">📂 Carpeta:</span> <span className="text-green-400">{song.folder}</span></p>
-            </div>
-            
-            <div className="space-y-2">
-              <button 
-                onClick={() => handleDownload(song)}
-                className="w-full bg-green-600 hover:bg-green-700 text-white text-sm font-medium py-2 px-3 rounded transition-colors duration-200 flex items-center justify-center space-x-2"
-              >
-                <Download className="h-4 w-4" />
-                <span>Descargar</span>
-              </button>
-              
-              <button 
-                onClick={() => navigator.clipboard.writeText(song.b2Url)}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2 px-3 rounded transition-colors duration-200 flex items-center justify-center space-x-2"
-              >
-                <ExternalLink className="h-4 w-4" />
-                <span>Copiar URL B2</span>
-              </button>
-              
-              <button 
-                onClick={() => handleDelete(song)}
-                className="w-full bg-red-600 hover:bg-red-700 text-white text-sm font-medium py-2 px-3 rounded transition-colors duration-200 flex items-center justify-center space-x-2"
-              >
-                <Trash2 className="h-4 w-4" />
-                <span>Eliminar</span>
-              </button>
-            </div>
 
-            <div className="mt-3 pt-3 border-t border-dark-600">
-              <p className="text-xs text-gray-500">
-                🆔 Firestore ID: {song.id}
-              </p>
-            </div>
-          </div>
+                <div className="space-y-2 mb-4">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-400">Tempo:</span>
+                    <span className="text-white">{multitrack.tempo} BPM</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-400">Tono:</span>
+                    <span className="text-white">{multitrack.key}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-400">Compás:</span>
+                    <span className="text-white">{multitrack.timeSignature}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-400">Tracks:</span>
+                    <span className="text-white">{multitrack.tracks.length}</span>
+                  </div>
+                </div>
+
+                <div className="mb-4">
+                  <h5 className="text-sm font-semibold text-gray-300 mb-2">Tracks:</h5>
+                  <div className="space-y-1 max-h-24 overflow-y-auto">
+                    {multitrack.tracks.map((track, index) => (
+                      <div key={index} className="text-xs text-gray-400 bg-dark-700 p-2 rounded">
+                        {index + 1}. {track.name}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="mt-3 pt-3 border-t border-dark-600">
+                  <p className="text-xs text-gray-500">
+                    🆔 Firestore ID: {multitrack.id}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    📁 Carpeta: {multitrack.folderPath}
+                  </p>
+                </div>
+              </div>
         ))}
       </div>
     </div>

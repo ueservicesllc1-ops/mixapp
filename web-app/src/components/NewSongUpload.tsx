@@ -1,5 +1,5 @@
 /**
- * NewSongUpload - Componente para subir canciones nuevas a la carpeta "newsongs"
+ * NewSongUpload - Componente para subir canciones nuevas a la nube
  */
 
 import React, { useState } from 'react';
@@ -51,7 +51,7 @@ const NewSongUpload: React.FC<NewSongUploadProps> = ({ isOpen, onClose, onUpload
       }
 
       if (!user?.uid) {
-        alert('Debes estar autenticado para subir canciones');
+        alert('Debes estar autenticado para subir a la nube');
         return;
       }
 

@@ -405,6 +405,48 @@ class FirestoreService {
       throw error;
     }
   }
+
+  async addMultitrack(multitrackData: any): Promise<string> {
+    try {
+      const multitrackRef = await addDoc(collection(db, 'multitracks'), {
+        ...multitrackData,
+        createdAt: Timestamp.now()
+      });
+      console.log('Multitrack added with ID:', multitrackRef.id);
+      return multitrackRef.id;
+    } catch (error) {
+      console.error('Error adding multitrack:', error);
+      throw error;
+    }
+  }
+
+  async getUserMultitracks(uid: string): Promise<any[]> {
+    try {
+      const q = query(
+        collection(db, 'multitracks'),
+        where('ownerId', '==', uid),
+        orderBy('createdAt', 'desc')
+      );
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('Error getting user multitracks:', error);
+      throw error;
+    }
+  }
+
+  async deleteMultitrack(multitrackId: string): Promise<void> {
+    try {
+      const multitrackRef = doc(db, 'multitracks', multitrackId);
+      await deleteDoc(multitrackRef);
+    } catch (error) {
+      console.error('Error deleting multitrack:', error);
+      throw error;
+    }
+  }
 }
 
 export default new FirestoreService();

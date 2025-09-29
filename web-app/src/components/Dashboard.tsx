@@ -12,6 +12,7 @@ import LEDScreenUpload from './LEDScreenUpload';
 import LEDDisplay from './LEDDisplay';
 import NewSongUpload from './NewSongUpload';
 import NewSongsLibrary from './NewSongsLibrary';
+import ZipUpload from './ZipUpload';
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
@@ -115,10 +116,9 @@ const Dashboard: React.FC = () => {
   };
 
   const tabs = [
-    { id: 'upload', label: 'Subir Canciones', icon: Upload },
+    { id: 'upload', label: 'Subir a la nube', icon: Upload },
     { id: 'library', label: 'Biblioteca', icon: Music },
     { id: 'songs', label: 'Mis Canciones', icon: Music },
-    { id: 'newsongs', label: '🎵 Yo Sí Sé', icon: Music },
     { id: 'led-screen', label: 'Pantalla LED', icon: Monitor },
     { id: 'analytics', label: 'Estadísticas', icon: BarChart3 },
   ];
@@ -126,23 +126,7 @@ const Dashboard: React.FC = () => {
   const renderTabContent = () => {
     switch (activeTab) {
       case 'upload':
-        return (
-          <div className="space-y-6">
-            <div>
-              <h2 className="text-2xl font-bold text-white mb-2">Subir Canciones</h2>
-              <p className="text-dark-400">
-                Sube tus archivos de audio multitrack para sincronizarlos con tu app móvil
-              </p>
-            </div>
-            <FileUpload 
-              userId={user?.uid || ''} 
-              onUploadComplete={() => {
-                // Refresh library if it's currently active
-                console.log('Upload completed, refreshing library...');
-              }}
-            />
-          </div>
-        );
+        return <ZipUpload />;
       
       case 'library':
         return (
@@ -158,93 +142,8 @@ const Dashboard: React.FC = () => {
         );
       
       case 'songs':
-        return (
-          <div className="space-y-6">
-            <div>
-              <h2 className="text-2xl font-bold text-white mb-2">🎵 Mis Canciones</h2>
-              <p className="text-dark-400">
-                Canciones individuales que has subido. Cada canción es un archivo único.
-              </p>
-            </div>
-            
-            {songs.length === 0 ? (
-              <div className="text-center py-12">
-                <div className="text-6xl mb-4">🎵</div>
-                <h3 className="text-xl font-bold text-white mb-2">No hay canciones</h3>
-                <p className="text-dark-400 mb-4">Sube tu primera canción individual</p>
-                <button
-                  onClick={() => setShowUploadForm(true)}
-                  className="bg-primary-600 hover:bg-primary-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200"
-                >
-                  Subir Canción
-                </button>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {songs.map((song) => (
-                  <div key={song.id} className="bg-dark-800 rounded-lg p-6 border border-dark-700">
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-2 mb-1">
-                          <h3 className="text-lg font-bold text-white">{song.title}</h3>
-                          {song.folder === 'newsongs' && (
-                            <span className="bg-green-600 text-white text-xs px-2 py-1 rounded-full font-medium">
-                              NEW
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-primary-400 font-medium">{song.artist}</p>
-                      </div>
-                      <div className="text-2xl">🎵</div>
-                    </div>
-                    
-                    <div className="space-y-2 text-sm text-dark-400 mb-4">
-                      <p><span className="font-medium">Archivo:</span> {song.fileName}</p>
-                      <p><span className="font-medium">Tamaño:</span> {(song.fileSize / 1024 / 1024).toFixed(2)} MB</p>
-                      <p><span className="font-medium">Subido:</span> {song.uploadDate}</p>
-                      {song.folder === 'newsongs' && (
-                        <p><span className="font-medium text-green-400">📂 Carpeta:</span> <span className="text-green-400">newsongs</span></p>
-                      )}
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <button 
-                        onClick={() => navigator.clipboard.writeText(song.uploadPath)}
-                        className="w-full bg-green-600 hover:bg-green-700 text-white text-sm font-medium py-2 px-3 rounded transition-colors duration-200"
-                      >
-                        📋 Copiar Ruta B2
-                      </button>
-                      <button 
-                        onClick={() => {
-                          const confirmDelete = window.confirm(`¿Eliminar "${song.title}" de la biblioteca?`);
-                          if (confirmDelete) {
-                            setSongs(prev => prev.filter(s => s.id !== song.id));
-                          }
-                        }}
-                        className="w-full bg-red-600 hover:bg-red-700 text-white text-sm font-medium py-2 px-3 rounded transition-colors duration-200"
-                      >
-                        🗑️ Eliminar
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        );
+        return <NewSongsLibrary />;
       
-      case 'newsongs':
-        return (
-          <div className="space-y-6">
-            <div>
-              <h2 className="text-2xl font-bold text-white mb-2">🎵 Yo Sí Sé - Canciones Nuevas</h2>
-              <p className="text-dark-400">
-                Canciones subidas usando el botón "YO SÍ SÉ". Se guardan en la carpeta "newsongs" de B2 y en la colección "newsongs" de Firestore.
-              </p>
-            </div>
-            <NewSongsLibrary />
-          </div>
-        );
       
       case 'led-screen':
         return (

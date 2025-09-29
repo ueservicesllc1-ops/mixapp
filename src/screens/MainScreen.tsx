@@ -59,6 +59,12 @@ const MainScreen: React.FC = () => {
   const [showCreateSetlistModal, setShowCreateSetlistModal] = useState(false);
   const [newSetlistName, setNewSetlistName] = useState('');
   const [showDownloadedSongsModal, setShowDownloadedSongsModal] = useState(false);
+  const [showLibraryModal, setShowLibraryModal] = useState(false);
+  const [multitracks, setMultitracks] = useState<any[]>([]);
+  const [loadingMultitracks, setLoadingMultitracks] = useState(false);
+  const [downloadingMultitrack, setDownloadingMultitrack] = useState(false);
+  const [downloadStatus, setDownloadStatus] = useState('');
+  const [showSetlistSelector, setShowSetlistSelector] = useState(false);
   const [downloadedSongs, setDownloadedSongs] = useState<any[]>([]);
   const [trackProgress, setTrackProgress] = useState<{[key: string]: number}>({});
   const [currentTrack, setCurrentTrack] = useState<string>('');
@@ -67,6 +73,7 @@ const MainScreen: React.FC = () => {
   const [showNewSongsModal, setShowNewSongsModal] = useState(false);
   const [newSongs, setNewSongs] = useState<any[]>([]);
   const [currentSetlistSongs, setCurrentSetlistSongs] = useState<any[]>([]);
+  const [addingToSetlist, setAddingToSetlist] = useState(false);
 
   const { user, signOut } = useAuth();
 
@@ -446,21 +453,606 @@ const MainScreen: React.FC = () => {
     }
   };
 
+  const loadMultitracks = async () => {
+    try {
+      setLoadingMultitracks(true);
+      if (user?.uid) {
+        console.log('🎛️ Cargando multitracks para usuario:', user.uid);
+        addDebugLog(`🎛️ Cargando multitracks para usuario: ${user.uid}`);
+        
+        const multitracks = await firestoreService.getUserMultitracks(user.uid);
+        console.log('🎛️ Multitracks encontrados:', multitracks);
+        console.log('🎛️ Cantidad de multitracks:', multitracks.length);
+        addDebugLog(`🎛️ Multitracks encontrados: ${multitracks.length}`);
+        
+        if (multitracks.length > 0) {
+          console.log('🎛️ Primer multitrack:', JSON.stringify(multitracks[0], null, 2));
+          addDebugLog(`🎛️ Primer multitrack: ${multitracks[0].songName} - ${multitracks[0].artist}`);
+        }
+        
+        setMultitracks(multitracks);
+      } else {
+        console.log('❌ No hay usuario autenticado');
+        addDebugLog('❌ No hay usuario autenticado para cargar multitracks');
+      }
+    } catch (error) {
+      console.error('❌ Error cargando multitracks:', error);
+      addDebugLog(`❌ Error cargando multitracks: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setLoadingMultitracks(false);
+    }
+  };
+
+  const loadSetlists = async () => {
+    try {
+      if (user?.uid) {
+        console.log('📋 Cargando setlists para usuario:', user.uid);
+        addDebugLog(`📋 Cargando setlists para usuario: ${user.uid}`);
+        
+        const setlists = await firestoreService.getUserSetlists(user.uid);
+        console.log('📋 Setlists encontrados:', setlists);
+        console.log('📋 Cantidad de setlists:', setlists.length);
+        addDebugLog(`📋 Setlists encontrados: ${setlists.length}`);
+        
+        if (setlists.length > 0) {
+          console.log('📋 Primer setlist:', JSON.stringify(setlists[0], null, 2));
+          addDebugLog(`📋 Primer setlist: ${setlists[0].name}`);
+        }
+        
+        setSetlistSongs(setlists);
+      } else {
+        console.log('❌ No hay usuario autenticado');
+        addDebugLog('❌ No hay usuario autenticado para cargar setlists');
+      }
+    } catch (error) {
+      console.error('❌ Error cargando setlists:', error);
+      addDebugLog(`❌ Error cargando setlists: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
+  const handleDeleteSetlist = async (setlist: any) => {
+    const confirmDelete = Alert.alert(
+      '🗑️ Eliminar Setlist',
+      `¿Estás seguro de que quieres eliminar "${setlist.name}"?\n\nEsta acción no se puede deshacer.`,
+      [
+        {
+          text: 'Cancelar',
+          style: 'cancel',
+        },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              console.log('🗑️ Eliminando setlist:', setlist.name);
+              addDebugLog(`🗑️ Eliminando setlist: ${setlist.name}`);
+              
+              await firestoreService.deleteSetlist(setlist.id);
+              
+              // Actualizar el estado local
+              setSetlistSongs(prev => prev.filter(s => s.id !== setlist.id));
+              
+              // Si el setlist eliminado era el seleccionado, limpiar la selección
+              if (selectedSetlist?.id === setlist.id) {
+                setSelectedSetlist(null);
+                setSelectedSetlistSongs([]);
+              }
+              
+              console.log('✅ Setlist eliminado exitosamente');
+              addDebugLog(`✅ Setlist "${setlist.name}" eliminado exitosamente`);
+              
+              Alert.alert('✅ Éxito', `Setlist "${setlist.name}" eliminado exitosamente`);
+            } catch (error) {
+              console.error('❌ Error eliminando setlist:', error);
+              addDebugLog(`❌ Error eliminando setlist: ${error instanceof Error ? error.message : String(error)}`);
+              Alert.alert('❌ Error', 'No se pudo eliminar el setlist. Inténtalo de nuevo.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDownloadMultitrack = async (multitrack: any) => {
+    try {
+      console.log('📥 Iniciando descarga de multitrack:', multitrack.songName);
+      addDebugLog(`📥 Descargando multitrack: ${multitrack.songName}`);
+      
+      // Usar carpeta Download directamente
+      const downloadFolder = '/storage/emulated/0/Download/';
+      
+      console.log(`📁 Verificando archivos en: ${downloadFolder}`);
+      addDebugLog(`📁 Verificando en: ${downloadFolder}`);
+      
+      // Verificar si todos los archivos ya existen
+      let allFilesExist = true;
+      const missingFiles = [];
+      
+      for (const track of multitrack.tracks) {
+        const filePath = `${downloadFolder}${multitrack.id}_${track.name}`;
+        const fileExists = await ReactNativeBlobUtil.fs.exists(filePath);
+        
+        if (fileExists) {
+          console.log(`✅ Archivo ya existe: ${track.name}`);
+          addDebugLog(`✅ Ya existe: ${track.name}`);
+        } else {
+          console.log(`❌ Archivo faltante: ${track.name}`);
+          addDebugLog(`❌ Faltante: ${track.name}`);
+          allFilesExist = false;
+          missingFiles.push(track);
+        }
+      }
+      
+      if (allFilesExist) {
+        console.log('✅ Todos los archivos ya están descargados');
+        addDebugLog('✅ Archivos ya descargados, solo agregando al setlist');
+        
+        // Solo agregar al setlist sin descargar
+        setDownloadingMultitrack(true);
+        setDownloadProgress(100);
+        setDownloadStatus('Agregando al setlist...');
+      } else {
+        console.log(`📥 Descargando ${missingFiles.length} archivos faltantes`);
+        addDebugLog(`📥 Descargando ${missingFiles.length} archivos`);
+        
+        // Iniciar barra de progreso para descarga
+        setDownloadingMultitrack(true);
+        setDownloadProgress(0);
+        setDownloadStatus(`Descargando archivos faltantes...`);
+      }
+      
+      // Descargar solo archivos faltantes
+      if (!allFilesExist) {
+        for (const [index, track] of missingFiles.entries()) {
+          const progress = ((index + 1) / missingFiles.length) * 100;
+          setDownloadProgress(progress);
+          setDownloadStatus(`Descargando track ${index + 1}/${missingFiles.length}: ${track.name}`);
+          
+          console.log(`📥 Descargando track ${index + 1}/${missingFiles.length}: ${track.name}`);
+          addDebugLog(`📥 Track ${index + 1}: ${track.name}`);
+        
+        // Construir URL completa si es relativa
+        let downloadUrl = track.downloadUrl;
+        if (downloadUrl.startsWith('/mixercur/')) {
+          const cleanPath = downloadUrl.replace('/mixercur/', '');
+          downloadUrl = `https://mixercur.s3.us-east-005.backblazeb2.com/${cleanPath}`;
+        }
+        
+        // Verificar que la URL es válida
+        if (!downloadUrl.startsWith('http')) {
+          console.error(`❌ URL inválida: ${downloadUrl}`);
+          addDebugLog(`❌ URL inválida: ${downloadUrl}`);
+          continue; // Saltar este track y continuar con el siguiente
+        }
+        
+        // Verificar que la URL es accesible con un HEAD request
+        try {
+          console.log(`🔍 Verificando URL: ${downloadUrl}`);
+          addDebugLog(`🔍 Verificando URL: ${downloadUrl}`);
+          
+          const headResult = await ReactNativeBlobUtil.config({
+            timeout: 10000,
+          }).fetch('HEAD', downloadUrl);
+          
+          console.log(`✅ URL accesible, status: ${headResult.info().status}`);
+          addDebugLog(`✅ URL accesible, status: ${headResult.info().status}`);
+          
+        } catch (headError) {
+          console.error(`❌ URL no accesible: ${headError}`);
+          addDebugLog(`❌ URL no accesible: ${headError}`);
+          continue; // Saltar este track si la URL no es accesible
+        }
+        
+        const filePath = `${downloadFolder}${multitrack.id}_${track.name}`;
+        
+        console.log(`🔗 URL de descarga: ${downloadUrl}`);
+        console.log(`📁 Ruta de archivo: ${filePath}`);
+        addDebugLog(`🔗 URL: ${downloadUrl}`);
+        addDebugLog(`📁 Archivo: ${filePath}`);
+        
+        // Intentar descarga con reintentos
+        let result;
+        let retryCount = 0;
+        const maxRetries = 3;
+        
+        while (retryCount < maxRetries) {
+          try {
+            console.log(`🔄 Intento ${retryCount + 1}/${maxRetries} para ${track.name}`);
+            addDebugLog(`🔄 Intento ${retryCount + 1}/${maxRetries} para ${track.name}`);
+            
+            result = await ReactNativeBlobUtil.config({
+              fileCache: true,
+              path: filePath,
+              timeout: 300000, // 5 minutos para archivos grandes
+            }).fetch('GET', downloadUrl, {
+              'Accept': '*/*',
+              'User-Agent': 'MixerCurseApp/1.0',
+            });
+            
+            console.log(`✅ Descarga exitosa en intento ${retryCount + 1}`);
+            addDebugLog(`✅ Descarga exitosa en intento ${retryCount + 1}`);
+            break; // Salir del bucle si la descarga fue exitosa
+            
+          } catch (downloadError) {
+            retryCount++;
+            console.error(`❌ Error en intento ${retryCount}: ${downloadError}`);
+            addDebugLog(`❌ Error intento ${retryCount}: ${downloadError}`);
+            
+            if (retryCount >= maxRetries) {
+              throw downloadError; // Re-lanzar el error si se agotaron los reintentos
+            }
+            
+            // Esperar antes del siguiente intento
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
+        }
+        
+        console.log(`📊 Resultado de descarga:`, result);
+        addDebugLog(`📊 Resultado: ${JSON.stringify(result)}`);
+        
+        // Información detallada del resultado
+        if (result && result.info) {
+          const info = result.info();
+          console.log(`📊 Status: ${info.status}`);
+          console.log(`📊 Headers: ${JSON.stringify(info.headers)}`);
+          console.log(`📊 Path: ${result.path()}`);
+          addDebugLog(`📊 Status: ${info.status}`);
+          addDebugLog(`📊 Headers: ${JSON.stringify(info.headers)}`);
+          addDebugLog(`📊 Path: ${result.path()}`);
+        }
+        
+        // Verificar que el archivo se creó
+        const fileExists = await ReactNativeBlobUtil.fs.exists(filePath);
+        console.log(`📁 Archivo existe: ${fileExists}`);
+        addDebugLog(`📁 Archivo existe: ${fileExists}`);
+        
+        // Verificar la ruta real donde se guardó
+        const actualPath = result.path();
+        console.log(`📁 Ruta real del archivo: ${actualPath}`);
+        addDebugLog(`📁 Ruta real: ${actualPath}`);
+        
+        // Verificar si existe en la ruta real
+        const realFileExists = await ReactNativeBlobUtil.fs.exists(actualPath);
+        console.log(`📁 Archivo existe en ruta real: ${realFileExists}`);
+        addDebugLog(`📁 Archivo existe en ruta real: ${realFileExists}`);
+        
+        if (fileExists) {
+          const fileStats = await ReactNativeBlobUtil.fs.stat(filePath);
+          console.log(`📊 Tamaño del archivo: ${fileStats.size} bytes`);
+          addDebugLog(`📊 Tamaño: ${fileStats.size} bytes`);
+          
+          // Verificar si el archivo tiene contenido
+          if (fileStats.size === 0) {
+            console.error(`❌ Archivo vacío: ${filePath}`);
+            addDebugLog(`❌ Archivo vacío: ${filePath}`);
+          }
+        } else {
+          console.error(`❌ Archivo no se creó: ${filePath}`);
+          addDebugLog(`❌ Archivo no creado: ${filePath}`);
+          
+          // Listar contenido de la carpeta Download
+          try {
+            const downloadFiles = await ReactNativeBlobUtil.fs.ls(downloadFolder);
+            console.log(`📁 Archivos en /Download/: ${JSON.stringify(downloadFiles)}`);
+            addDebugLog(`📁 Archivos en /Download/: ${JSON.stringify(downloadFiles)}`);
+          } catch (downloadError) {
+            console.error(`❌ Error listando /Download/: ${downloadError}`);
+            addDebugLog(`❌ Error listando /Download/: ${downloadError}`);
+          }
+        }
+        
+          console.log(`✅ Track descargado: ${track.name}`);
+          addDebugLog(`✅ Track descargado: ${track.name}`);
+        }
+      }
+      
+      // Actualizar la colección de setlists con indicador de almacenamiento local
+      setDownloadStatus('Actualizando setlists...');
+      try {
+        console.log('💾 Actualizando setlists con indicador de almacenamiento local...');
+        addDebugLog(`💾 Actualizando setlists para multitrack: ${multitrack.songName}`);
+        
+        // Crear objeto de canción para setlist con indicador local
+        const localSong = {
+          id: multitrack.id,
+          songName: multitrack.songName,
+          artist: multitrack.artist,
+          tempo: multitrack.tempo,
+          key: multitrack.key,
+          timeSignature: multitrack.timeSignature,
+          isLocal: true, // Indicador de que está en almacenamiento local
+          localPath: downloadFolder, // Ruta local del proyecto
+          tracks: multitrack.tracks.map(track => ({
+            ...track,
+            localPath: `${downloadFolder}${multitrack.id}_${track.name}` // Ruta local de cada track
+          })),
+          downloadedAt: new Date(),
+          type: 'multitrack'
+        };
+        
+        // Agregar a la colección de canciones descargadas
+        await firestoreService.addDownloadedSong(localSong);
+        
+        // Agregar al setlist seleccionado si existe
+        if (selectedSetlist) {
+          console.log('🎵 Agregando multitrack al setlist seleccionado:', selectedSetlist.name);
+          addDebugLog(`🎵 Agregando a setlist: ${selectedSetlist.name}`);
+          
+          const setlistSong = {
+            title: multitrack.songName, // Cambiar songName por title
+            artist: multitrack.artist,
+            tempo: multitrack.tempo,
+            key: multitrack.key,
+            timeSignature: multitrack.timeSignature,
+            isLocal: true,
+            localPath: downloadFolder,
+            tracks: multitrack.tracks.map(track => ({
+              ...track,
+              localPath: `${downloadFolder}${multitrack.id}_${track.name}`
+            })),
+            downloadedAt: new Date(),
+            type: 'multitrack',
+            order: Date.now() // Agregar orden para ordenamiento
+          };
+          
+          console.log('📤 Enviando canción a setlist:', setlistSong);
+          addDebugLog(`📤 Canción a agregar: ${JSON.stringify(setlistSong)}`);
+          
+          try {
+            const songId = await firestoreService.addSongToSetlist(selectedSetlist.id, setlistSong);
+            console.log('✅ Multitrack agregado al setlist con ID:', songId);
+            addDebugLog(`✅ Agregado a setlist: ${selectedSetlist.name} con ID: ${songId}`);
+            
+            // Recargar canciones del setlist actual
+            await loadCurrentSetlistSongs();
+          } catch (setlistError) {
+            console.error('❌ Error agregando al setlist:', setlistError);
+            addDebugLog(`❌ Error setlist: ${setlistError instanceof Error ? setlistError.message : String(setlistError)}`);
+          }
+        } else {
+          console.log('⚠️ No hay setlist seleccionado');
+          addDebugLog('⚠️ No hay setlist seleccionado');
+        }
+        
+        console.log('✅ Setlist actualizado con indicador local');
+        addDebugLog(`✅ Setlist actualizado para multitrack: ${multitrack.songName}`);
+        
+      } catch (updateError) {
+        console.error('⚠️ Error actualizando setlist:', updateError);
+        addDebugLog(`⚠️ Error actualizando setlist: ${updateError instanceof Error ? updateError.message : String(updateError)}`);
+        // No mostrar error al usuario, la descarga fue exitosa
+      }
+      
+      // Finalizar barra de progreso
+      setDownloadProgress(100);
+      setDownloadStatus('Descarga completada');
+      
+      console.log('✅ Multitrack descargado completamente');
+      addDebugLog(`✅ Multitrack "${multitrack.songName}" descargado completamente`);
+      
+      if (allFilesExist) {
+        Alert.alert(
+          '✅ Agregado al Setlist',
+          `Multitrack "${multitrack.songName}" agregado al setlist "${selectedSetlist?.name || 'seleccionado'}"\n\nLos archivos ya estaban descargados.`,
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert(
+          '✅ Descarga Completada',
+          `Multitrack "${multitrack.songName}" descargado y agregado exitosamente\n\nUbicación: ${downloadFolder}\n\nAhora está disponible en almacenamiento local.`,
+          [{ text: 'OK' }]
+        );
+      }
+      
+    } catch (error) {
+      console.error('❌ Error descargando multitrack:', error);
+      addDebugLog(`❌ Error descargando multitrack: ${error instanceof Error ? error.message : String(error)}`);
+      Alert.alert('❌ Error', 'No se pudo descargar el multitrack. Inténtalo de nuevo.');
+    } finally {
+      // Limpiar barra de progreso
+      setDownloadingMultitrack(false);
+      setDownloadProgress(0);
+      setDownloadStatus('');
+    }
+  };
+
+  // Función para agregar multitrack al setlist sin descargar
+  const handleAddToSetlist = async (multitrack: any) => {
+    try {
+      if (addingToSetlist) {
+        console.log('⏳ Ya se está agregando una canción, esperando...');
+        addDebugLog('⏳ Operación en progreso, esperando...');
+        return;
+      }
+
+      if (!selectedSetlist) {
+        Alert.alert('⚠️ Selecciona un Setlist', 'Primero selecciona un setlist para agregar la canción.');
+        return;
+      }
+
+      setAddingToSetlist(true);
+
+      // Verificar si la canción ya existe en el setlist
+      console.log('🔍 Verificando duplicados...');
+      addDebugLog(`🔍 Verificando duplicados para: ${multitrack.songName}`);
+      
+      const existingSongs = await firestoreService.getSetlistSongs(selectedSetlist.id);
+      const duplicateExists = existingSongs.some(song => 
+        song.title === multitrack.songName && song.artist === multitrack.artist
+      );
+      
+      if (duplicateExists) {
+        console.log('⚠️ Canción ya existe en el setlist');
+        addDebugLog(`⚠️ Ya existe: ${multitrack.songName} - ${multitrack.artist}`);
+        Alert.alert(
+          '⚠️ Canción Duplicada',
+          `"${multitrack.songName}" ya está en el setlist "${selectedSetlist.name}"`,
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
+      console.log('🎵 Agregando multitrack al setlist:', selectedSetlist.name);
+      addDebugLog(`🎵 Agregando a setlist: ${selectedSetlist.name}`);
+
+      const setlistSong = {
+        title: multitrack.songName,
+        artist: multitrack.artist,
+        tempo: multitrack.tempo,
+        key: multitrack.key,
+        timeSignature: multitrack.timeSignature,
+        isLocal: false, // No está en almacenamiento local
+        type: 'multitrack',
+        order: Date.now()
+      };
+
+      console.log('📤 Enviando canción a setlist:', setlistSong);
+      addDebugLog(`📤 Canción a agregar: ${JSON.stringify(setlistSong)}`);
+
+      // Verificar conexión y usar servicio apropiado
+      const offlineService = SimpleOfflineService.getInstance();
+      const isOnline = await offlineService.checkConnectionStatus();
+      
+      if (isOnline) {
+        console.log('🌐 Online: Agregando a Firebase');
+        addDebugLog('🌐 Online: Agregando a Firebase');
+        
+        try {
+          console.log('🔥 Intentando agregar a Firebase...');
+          console.log('🔥 Setlist ID:', selectedSetlist.id);
+          console.log('🔥 Song data:', JSON.stringify(setlistSong, null, 2));
+          addDebugLog(`🔥 Firebase: Setlist ID: ${selectedSetlist.id}`);
+          addDebugLog(`🔥 Firebase: Song: ${JSON.stringify(setlistSong)}`);
+          
+          const songId = await firestoreService.addSongToSetlist(selectedSetlist.id, setlistSong);
+          console.log('✅ Multitrack agregado al setlist con ID:', songId);
+          addDebugLog(`✅ Agregado a setlist: ${selectedSetlist.name} con ID: ${songId}`);
+          
+          // Actualizar contador de canciones en el setlist principal
+          try {
+            const currentSongs = await firestoreService.getSetlistSongs(selectedSetlist.id);
+            await firestoreService.updateSetlist(selectedSetlist.id, { 
+              songs: currentSongs,
+              songCount: currentSongs.length 
+            });
+            console.log('📊 Contador de setlist actualizado:', currentSongs.length);
+            addDebugLog(`📊 Contador actualizado: ${currentSongs.length} canciones`);
+          } catch (updateError) {
+            console.error('⚠️ Error actualizando contador:', updateError);
+            addDebugLog(`⚠️ Error contador: ${updateError instanceof Error ? updateError.message : String(updateError)}`);
+          }
+          
+          // También guardar offline para sincronización
+          offlineService.addDownloadedSong(selectedSetlist.id, setlistSong);
+          
+        } catch (firebaseError) {
+          console.error('❌ Error en Firebase, guardando offline:', firebaseError);
+          addDebugLog(`❌ Error Firebase: ${firebaseError instanceof Error ? firebaseError.message : String(firebaseError)}`);
+          
+          // Guardar offline como respaldo
+          offlineService.addDownloadedSong(selectedSetlist.id, setlistSong);
+          console.log('💾 Guardado offline como respaldo');
+          addDebugLog('💾 Guardado offline como respaldo');
+        }
+      } else {
+        console.log('📱 Offline: Guardando localmente');
+        addDebugLog('📱 Offline: Guardando localmente');
+        
+        // Guardar offline
+        offlineService.addDownloadedSong(selectedSetlist.id, setlistSong);
+        console.log('💾 Guardado offline');
+        addDebugLog('💾 Guardado offline');
+      }
+
+      // Recargar canciones del setlist actual
+      await loadCurrentSetlistSongs();
+
+      Alert.alert(
+        '✅ Agregado al Setlist',
+        `"${multitrack.songName}" agregado al setlist "${selectedSetlist.name}"${!isOnline ? ' (offline)' : ''}`,
+        [{ text: 'OK' }]
+      );
+
+    } catch (error) {
+      console.error('❌ Error agregando al setlist:', error);
+      addDebugLog(`❌ Error setlist: ${error instanceof Error ? error.message : String(error)}`);
+      Alert.alert('❌ Error', 'No se pudo agregar la canción al setlist. Inténtalo de nuevo.');
+    } finally {
+      setAddingToSetlist(false);
+    }
+  };
+
+  // Función para limpiar canciones duplicadas del setlist
+  const cleanDuplicateSongs = async (setlistId: string) => {
+    try {
+      console.log('🧹 Limpiando canciones duplicadas...');
+      addDebugLog(`🧹 Limpiando duplicados en setlist: ${setlistId}`);
+      
+      const songs = await firestoreService.getSetlistSongs(setlistId);
+      const uniqueSongs = [];
+      const seen = new Set();
+      
+      for (const song of songs) {
+        const key = `${song.title}-${song.artist}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          uniqueSongs.push(song);
+        } else {
+          console.log(`🗑️ Eliminando duplicado: ${song.title} - ${song.artist}`);
+          addDebugLog(`🗑️ Duplicado eliminado: ${song.title} - ${song.artist}`);
+        }
+      }
+      
+      if (uniqueSongs.length < songs.length) {
+        console.log(`🧹 Encontrados ${songs.length - uniqueSongs.length} duplicados`);
+        addDebugLog(`🧹 ${songs.length - uniqueSongs.length} duplicados encontrados`);
+        
+        // Aquí podrías implementar la lógica para eliminar duplicados de Firebase
+        // Por ahora solo mostramos la información
+        Alert.alert(
+          '🧹 Duplicados Encontrados',
+          `Se encontraron ${songs.length - uniqueSongs.length} canciones duplicadas en el setlist.`,
+          [{ text: 'OK' }]
+        );
+      }
+      
+    } catch (error) {
+      console.error('❌ Error limpiando duplicados:', error);
+      addDebugLog(`❌ Error limpiando: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
   // Función para cargar canciones del setlist actual
   const loadCurrentSetlistSongs = async () => {
     try {
       if (user?.uid && selectedSetlist) {
         console.log('🎵 Cargando canciones del setlist actual:', selectedSetlist.name);
+        console.log('🎵 Setlist ID:', selectedSetlist.id);
+        addDebugLog(`🎵 Cargando canciones de: ${selectedSetlist.name} (${selectedSetlist.id})`);
+        
         const songs = await firestoreService.getSetlistSongs(selectedSetlist.id);
         console.log('🎵 Canciones del setlist encontradas:', songs);
+        console.log('🎵 Cantidad de canciones:', songs.length);
+        addDebugLog(`🎵 Canciones encontradas: ${songs.length}`);
+        
         setCurrentSetlistSongs(songs);
+        
+        // Verificar y limpiar duplicados si es necesario
+        if (songs.length > 1) {
+          await cleanDuplicateSongs(selectedSetlist.id);
+        }
+        
+        // También recargar la lista de setlists para actualizar el contador
+        await loadSetlists();
       } else {
         console.log('❌ No hay setlist seleccionado');
+        addDebugLog('❌ No hay setlist seleccionado');
         setCurrentSetlistSongs([]);
       }
     } catch (error) {
       console.error('❌ Error cargando canciones del setlist:', error);
-      addDebugLog(`Error cargando canciones del setlist: ${error instanceof Error ? error.message : String(error)}`);
+      addDebugLog(`❌ Error cargando setlist: ${error instanceof Error ? error.message : String(error)}`);
+      setCurrentSetlistSongs([]);
     }
   };
 
@@ -986,202 +1578,167 @@ const MainScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* BOTÓN CENTRAL */}
-      <View style={styles.centralButtonContainer}>
-        <TouchableOpacity 
-          style={styles.centralButton}
-          onPress={() => setShowUploadForm(true)}
-        >
-          <Text style={styles.centralButtonText}>SI PUEDO HACERLO</Text>
-        </TouchableOpacity>
-      </View>
+      {/* BOTÓN CENTRAL ELIMINADO */}
 
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>MixerCurse</Text>
-        <View style={styles.headerButtons}>
-          <TouchableOpacity 
-            style={styles.libraryButton}
-            onPress={() => setShowLibraryDrawer(true)}
-          >
-            <Text style={styles.buttonText}>📚 Biblioteca</Text>
+        <TouchableOpacity style={styles.squareButton}>
+          <Text style={styles.squareButtonText}>&lt;</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.squareButton}>
+          <Text style={[styles.squareButtonText, { transform: [{ rotate: '90deg' }] }]}>△</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.squareButton}>
+          <Text style={styles.squareButtonText}>□</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.squareButton}>
+          <Text style={styles.squareButtonText}>&gt;</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* LED Display Area - Pantalla LED Grande */}
+      <View style={styles.ledSection}>
+        <View style={styles.ledScreen}>
+          <View style={styles.ledContent}>
+            <View style={styles.rectangleRight}>
+              <Text style={styles.setlistText}>{(selectedSetlist?.name || 'Mi Setlist Principal').toUpperCase()}</Text>
+            </View>
+            
+            {/* Lista de canciones del setlist */}
+            <View style={styles.songsContainer}>
+              {selectedSetlistSongs.slice(0, 5).map((song, index) => {
+                const rectangleStyle = [
+                  styles.songRectangle,
+                  index === 0 && styles.songRectangle1,
+                  index === 1 && styles.songRectangle2,
+                  index === 2 && styles.songRectangle3,
+                  index === 3 && styles.songRectangle4,
+                  index === 4 && styles.songRectangle5,
+                ].filter(Boolean);
+                
+                return (
+                  <View key={song.id || index} style={rectangleStyle}>
+                    <Text style={styles.songText}>
+                      {`${index + 1}. ${song.title?.toUpperCase() || 'CANCIÓN'}`}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+        
+        <View style={styles.leftButtons}>
+          <TouchableOpacity style={styles.leftButton}>
+            <Text style={styles.leftButtonText}>HOME</Text>
           </TouchableOpacity>
-            <TouchableOpacity 
-            style={styles.setlistButton}
+          <TouchableOpacity style={styles.leftButton}>
+            <Text style={styles.leftButtonText}>SETTINGS</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.leftButton}>
+            <Text style={styles.leftButtonText}>EQ</Text>
+          </TouchableOpacity>
+        </View>
+        
+        <View style={styles.rightButtons}>
+          <TouchableOpacity 
+            style={styles.rightButton}
             onPress={() => {
               console.log('🎵 Abriendo modal de setlists');
               setShowMySetlistDrawer(true);
             }}
-            >
-            <Text style={styles.buttonText}>🎵 Mi Setlist</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-            style={styles.downloadedButton}
-            onPress={() => {
-              console.log('📁 Abriendo modal de canciones descargadas');
-              loadDownloadedSongs();
-              setShowDownloadedSongsModal(true);
-            }}
-            >
-            <Text style={styles.buttonText}>📁 Descargadas</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-            style={styles.newSongsButton}
+          >
+            <Text style={styles.rightButtonText}>MI SETLIST</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.rightButton}
             onPress={() => {
               console.log('🎵 Abriendo modal de canciones nuevas');
               loadNewSongs();
               setShowNewSongsModal(true);
             }}
-            >
-            <Text style={styles.buttonText}>🎵 New Songs</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-            style={styles.logsButton}
+          >
+            <Text style={styles.rightButtonText}>NEW SONGS</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.rightButton}
             onPress={() => {
-              console.log('📋 Abriendo logs en tiempo real');
-              setShowLogsModal(true);
+              console.log('📚 Abriendo modal de librería');
+              loadMultitracks();
+              loadSetlists();
+              setShowLibraryModal(true);
             }}
-            >
-            <Text style={styles.buttonText}>📋 Logs</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-            style={styles.diagnosticButton}
-            onPress={async () => {
-              console.log('🔍 Ejecutando diagnóstico completo');
-              await runDiagnostic();
-              setShowLogsModal(true);
-            }}
-            >
-            <Text style={styles.buttonText}>🔍 Diagnóstico</Text>
-            </TouchableOpacity>
-          </View>
-          </View>
-
-      {/* LED Display Area */}
-      <View style={styles.ledSection}>
-        <LEDDisplay />
-          </View>
-
-      {/* Mixer Area */}
-      <View style={styles.mixerSection}>
-        <View style={styles.transportControls}>
-                  <TouchableOpacity
-            style={[styles.playButton, isPlaying && styles.playButtonActive]}
-            onPress={() => setIsPlaying(!isPlaying)}
-                  >
-            <Text style={styles.playButtonText}>{isPlaying ? '⏸️' : '▶️'}</Text>
-                  </TouchableOpacity>
-          
-          <View style={styles.timeDisplay}>
-            <Text style={styles.timeText}>{currentTime}</Text>
-            <Text style={styles.timeText}>/</Text>
-            <Text style={styles.timeText}>{totalTime}</Text>
-                    </View>
-                    </View>
-
-        <View style={styles.tempoControls}>
-          <Text style={styles.tempoLabel}>BPM: {bpm}</Text>
-          <Text style={styles.keyLabel}>Key: {key}</Text>
-                        </View>
-              </View>
-
-      {/* Setlist Area */}
-      <View style={styles.setlistSection}>
-        <Text style={styles.sectionTitle}>
-          {selectedSetlist ? `Setlist: ${selectedSetlist.name}` : 'Setlist'}
-        </Text>
-        <ScrollView style={styles.setlistContainer}>
-          {currentSetlistSongs.length === 0 ? (
-            <View style={styles.emptySetlistContainer}>
-              <Text style={styles.emptySetlistText}>
-                {selectedSetlist 
-                  ? `"${selectedSetlist.name}" está vacío\n\nAgrega canciones desde la biblioteca`
-                  : 'Selecciona un setlist para ver las canciones'
-                }
-              </Text>
-              {selectedSetlist && (
-                <TouchableOpacity 
-                  style={styles.addSongsButton}
-                  onPress={() => {
-                    console.log('📚 Abriendo biblioteca para agregar canciones');
-                    setShowLibraryDrawer(true);
-                  }}
-                >
-                  <Text style={styles.addSongsButtonText}>📚 Agregar Canciones</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          ) : (
-            currentSetlistSongs.map((song, index) => (
-              <View key={index} style={styles.setlistSongItem}>
-                <View style={styles.setlistSongInfo}>
-                  <Text style={styles.setlistSongTitle}>{song.title || song.name}</Text>
-                  <Text style={styles.setlistSongArtist}>{song.artist}</Text>
-                  <Text style={styles.setlistSongDetails}>
-                    BPM: {song.bpm || 'N/A'} | Key: {song.key || 'N/A'}
-                  </Text>
-                </View>
-                <View style={styles.setlistSongActions}>
-                  <TouchableOpacity 
-                    style={styles.playSetlistButton}
-                    onPress={() => {
-                      console.log('▶️ Reproduciendo:', song.title);
-                      // Aquí puedes agregar lógica de reproducción
-                    }}
-                  >
-                    <Text style={styles.playSetlistButtonText}>▶️</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={styles.removeSetlistButton}
-                    onPress={() => {
-                      console.log('🗑️ Eliminando del setlist:', song.title);
-                      // Aquí puedes agregar lógica para eliminar del setlist
-                    }}
-                  >
-                    <Text style={styles.removeSetlistButtonText}>🗑️</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ))
-          )}
-        </ScrollView>
+          >
+            <Text style={styles.rightButtonText}>LIBRERÍA</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {/* Download Progress */}
-      {isDownloading && (
-        <View style={styles.downloadingContainer}>
-          <Text style={styles.downloadingText}>{downloadingFile}</Text>
-          <Text style={styles.progressText}>{downloadProgress}%</Text>
-          
-          {/* Progreso detallado de tracks */}
-          {Object.keys(trackProgress).length > 0 && (
-            <View style={styles.trackProgressContainer}>
-              <Text style={styles.trackProgressTitle}>Progreso por Track:</Text>
-              {Object.entries(trackProgress).map(([trackName, progress]) => (
-                <View key={trackName} style={styles.trackProgressItem}>
-                  <Text style={styles.trackName}>
-                    {trackName} {currentTrack === trackName && '⬅️'}
-            </Text>
-                  <View style={styles.trackProgressBar}>
-            <View 
-              style={[
-                        styles.trackProgressFill, 
-                        { 
-                          width: progress === -1 ? '100%' : `${Math.max(0, progress)}%`,
-                          backgroundColor: progress === -1 ? '#ff4444' : progress === 100 ? '#44ff44' : '#4488ff'
-                        }
-              ]} 
-            />
-                </View>
-                  <Text style={styles.trackProgressText}>
-                    {progress === -1 ? 'Error' : `${progress}%`}
-                  </Text>
-              </View>
-              ))}
+      {/* Vertical Sliders Section */}
+      <View style={styles.slidersSection}>
+        <View style={styles.slidersRow}>
+          <View style={styles.verticalSlider}>
+            <Text style={styles.sliderLabel}>MUTE</Text>
+            <View style={styles.sliderTrack}>
+              <View style={[styles.sliderKnob, {top: 10}]} />
             </View>
-          )}
           </View>
-      )}
+          
+          <View style={styles.verticalSlider}>
+            <Text style={styles.sliderLabel}>BASS</Text>
+            <View style={styles.sliderTrack}>
+              <View style={[styles.sliderKnob, {top: 50}]} />
+            </View>
+          </View>
+          
+          <View style={styles.verticalSlider}>
+            <Text style={styles.sliderLabel}>SYNTH</Text>
+            <View style={styles.sliderTrack}>
+              <View style={[styles.sliderKnob, {top: 60}]} />
+            </View>
+          </View>
+          
+          <View style={styles.verticalSlider}>
+            <Text style={styles.sliderLabel}>SYNTH</Text>
+            <View style={styles.sliderTrack}>
+              <View style={[styles.sliderKnob, {top: 80}]} />
+            </View>
+          </View>
+          
+          <View style={styles.verticalSlider}>
+            <Text style={styles.sliderLabel}>FOCUS</Text>
+            <View style={styles.sliderTrack}>
+              <View style={[styles.sliderKnob, {top: 45}]} />
+            </View>
+          </View>
+          
+          <View style={styles.verticalSlider}>
+            <Text style={styles.sliderLabel}>VOCALS</Text>
+            <View style={styles.sliderTrack}>
+              <View style={[styles.sliderKnob, {top: 55}]} />
+            </View>
+            <Text style={styles.sliderNumber}>6</Text>
+          </View>
+          
+          <View style={styles.verticalSlider}>
+            <Text style={styles.sliderLabel}>COMS</Text>
+            <View style={styles.sliderTrack}>
+              <View style={[styles.sliderKnob, {top: 30}]} />
+            </View>
+            <Text style={styles.sliderNumber}>9</Text>
+            <View style={styles.sliderButton} />
+            <View style={[styles.sliderButton, {top: 100}]} />
+          </View>
+        </View>
+        
+        <View style={styles.soloButton}>
+          <Text style={styles.soloButtonText}>SOLO</Text>
+        </View>
+      </View>
+
+
+
+
 
       {/* Biblioteca Modal */}
       <Modal
@@ -1342,10 +1899,7 @@ const MainScreen: React.FC = () => {
                           </TouchableOpacity>
                           <TouchableOpacity 
                       style={styles.deleteButton}
-                             onPress={() => {
-                        // Aquí puedes agregar funcionalidad para eliminar setlist
-                        console.log('Eliminando setlist:', setlist.name);
-                      }}
+                             onPress={() => handleDeleteSetlist(setlist)}
                     >
                       <Text style={styles.deleteButtonText}>🗑️</Text>
                 </TouchableOpacity>
@@ -1799,6 +2353,241 @@ const MainScreen: React.FC = () => {
         </View>
       </Modal>
 
+      {/* Modal para Librería */}
+      <Modal
+        visible={showLibraryModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowLibraryModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.fullScreenModal}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>📚 Librería</Text>
+              <View style={styles.headerButtons}>
+                <TouchableOpacity 
+                  style={styles.refreshButton}
+                  onPress={() => {
+                    console.log('🔄 Actualizando multitracks...');
+                    loadMultitracks();
+                  }}
+                >
+                  <Text style={styles.refreshButtonText}>🔄 Actualizar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.closeButton}
+                  onPress={() => setShowLibraryModal(false)}
+                >
+                  <Text style={styles.closeButtonText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.libraryContainer}>
+        {/* Panel izquierdo - Multitracks */}
+        <View style={styles.libraryLeftPanel}>
+          <Text style={styles.panelTitle}>🎛️ Mis Multitracks</Text>
+          
+          {/* Barra de progreso de descarga */}
+          {downloadingMultitrack && (
+            <View style={styles.downloadProgressContainer}>
+              <Text style={styles.downloadProgressText}>{downloadStatus}</Text>
+              <View style={styles.downloadProgressBar}>
+                <View style={[styles.downloadProgressFill, { width: `${downloadProgress}%` }]} />
+              </View>
+              <Text style={styles.downloadProgressPercent}>{Math.round(downloadProgress)}%</Text>
+            </View>
+          )}
+          
+          <ScrollView style={styles.libraryContent}>
+                  {loadingMultitracks ? (
+                    <View style={styles.emptyContainer}>
+                      <Text style={styles.emptyText}>
+                        🔄 Cargando multitracks...
+                      </Text>
+                    </View>
+                  ) : multitracks.length === 0 ? (
+                    <View style={styles.emptyContainer}>
+                      <Text style={styles.emptyText}>
+                        No hay multitracks disponibles
+                      </Text>
+                      <Text style={styles.emptySubText}>
+                        Ve a la web app y sube un ZIP con múltiples tracks
+                      </Text>
+                    </View>
+                  ) : (
+                    multitracks.map((multitrack, index) => (
+                      <View key={index} style={styles.multitrackContainer}>
+                        <View style={styles.multitrackInfo}>
+                          <Text style={styles.multitrackTitle}>{multitrack.songName}</Text>
+                          <Text style={styles.multitrackArtist}>{multitrack.artist}</Text>
+                          <Text style={styles.multitrackDetails}>
+                            {multitrack.tempo} BPM • {multitrack.key} • {multitrack.timeSignature}
+                          </Text>
+                        </View>
+                        <View style={styles.multitrackButtons}>
+                          <TouchableOpacity 
+                            style={styles.downloadMultitrackButton}
+                            onPress={() => handleDownloadMultitrack(multitrack)}
+                          >
+                            <Text style={styles.downloadMultitrackButtonText}>Descargar</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity 
+                            style={[
+                              styles.addToSetlistButton,
+                              addingToSetlist && styles.addToSetlistButtonDisabled
+                            ]}
+                            onPress={() => handleAddToSetlist(multitrack)}
+                            disabled={addingToSetlist}
+                          >
+                            <Text style={[
+                              styles.addToSetlistButtonText,
+                              addingToSetlist && styles.addToSetlistButtonTextDisabled
+                            ]}>
+                              {addingToSetlist ? 'Agregando...' : '+ Setlist'}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ))
+                  )}
+                </ScrollView>
+              </View>
+
+              {/* Panel derecho - Setlists */}
+              <View style={styles.libraryRightPanel}>
+                <View style={styles.setlistHeader}>
+                  <Text style={styles.panelTitle}>📋 Mis Setlists</Text>
+                  <View style={styles.setlistHeaderButtons}>
+                    <TouchableOpacity 
+                      style={styles.refreshButton}
+                      onPress={() => {
+                        console.log('🔄 Actualizando setlists...');
+                        loadSetlists();
+                      }}
+                    >
+                      <Text style={styles.refreshButtonText}>🔄</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={styles.setlistSelectorButton}
+                      onPress={() => setShowSetlistSelector(true)}
+                    >
+                      <Text style={styles.setlistSelectorButtonText}>Elegir</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+                <ScrollView style={styles.libraryContent}>
+                  {setlistSongs.length === 0 ? (
+                    <View style={styles.emptyContainer}>
+                      <Text style={styles.emptyText}>
+                        No hay setlists disponibles
+                      </Text>
+                      <Text style={styles.emptySubText}>
+                        Crea tu primer setlist desde la app
+                      </Text>
+                    </View>
+                  ) : (
+                    setlistSongs.map((setlist, index) => (
+                      <TouchableOpacity 
+                        key={index} 
+                        style={[
+                          styles.setlistButton,
+                          selectedSetlist?.id === setlist.id && styles.setlistButtonActive
+                        ]}
+                        onPress={() => {
+                          console.log('📋 Setlist seleccionado en LIBRERÍA:', setlist.name);
+                          setSelectedSetlist(setlist);
+                          // Cargar las canciones del setlist seleccionado
+                          loadSelectedSetlistSongs(setlist.id);
+                        }}
+                      >
+                        <View style={styles.setlistButtonContent}>
+                          <View style={styles.setlistButtonLeft}>
+                            <Text style={styles.setlistButtonTitle}>{setlist.name}</Text>
+                            <Text style={styles.setlistButtonSongs}>
+                              {setlist.songs?.length || 0} canciones
+                            </Text>
+                          </View>
+                          <View style={styles.setlistButtonRight}>
+                            <Text style={styles.setlistButtonInfo}>
+                              {selectedSetlist?.id === setlist.id ? '✓ Seleccionado' : (setlist.isActive ? 'Activo' : 'Inactivo')}
+                            </Text>
+                          </View>
+                        </View>
+                      </TouchableOpacity>
+                    ))
+                  )}
+                </ScrollView>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal para selector de setlists */}
+      <Modal
+        visible={showSetlistSelector}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowSetlistSelector(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.setlistSelectorModal}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>📋 Elegir Setlist</Text>
+              <TouchableOpacity 
+                style={styles.closeButton}
+                onPress={() => setShowSetlistSelector(false)}
+              >
+                <Text style={styles.closeButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.setlistSelectorContent}>
+              {setlistSongs.length === 0 ? (
+                <View style={styles.emptyContainer}>
+                  <Text style={styles.emptyText}>
+                    No hay setlists disponibles
+                  </Text>
+                  <Text style={styles.emptySubText}>
+                    Crea tu primer setlist desde la app
+                  </Text>
+                </View>
+              ) : (
+                setlistSongs.map((setlist, index) => (
+                  <TouchableOpacity 
+                    key={index} 
+                    style={[
+                      styles.setlistSelectorItem,
+                      selectedSetlist?.id === setlist.id && styles.setlistSelectorItemActive
+                    ]}
+                    onPress={() => {
+                      setSelectedSetlist(setlist);
+                      setShowSetlistSelector(false);
+                      console.log('📋 Setlist seleccionado:', setlist.name);
+                    }}
+                  >
+                    <View style={styles.setlistSelectorItemContent}>
+                      <View style={styles.setlistSelectorItemLeft}>
+                        <Text style={styles.setlistSelectorItemTitle}>{setlist.name}</Text>
+                        <Text style={styles.setlistSelectorItemSongs}>
+                          {setlist.songs?.length || 0} canciones
+                        </Text>
+                      </View>
+                      <View style={styles.setlistSelectorItemRight}>
+                        {selectedSetlist?.id === setlist.id && (
+                          <Text style={styles.setlistSelectorItemActiveText}>✓</Text>
+                        )}
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                ))
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
       {/* Modal para logs en tiempo real */}
       <Modal
         visible={showLogsModal}
@@ -1975,7 +2764,7 @@ const styles = StyleSheet.create({
   },
   modalHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
     backgroundColor: '#2a2a2a',
@@ -2003,10 +2792,14 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
-    backgroundColor: '#2a2a2a',
+    padding: 12,
+    backgroundColor: '#1a1a1a',
+    gap: 15,
+    marginBottom: 0,
+    zIndex: 10,
+    position: 'relative',
   },
   headerTitle: {
     color: '#fff',
@@ -2023,10 +2816,39 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 6,
   },
+  homeButton: {
+    backgroundColor: '#1a1a1a',
+    paddingHorizontal: 25,
+    paddingVertical: 9,
+    borderRadius: 0,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 6,
+      height: 6,
+    },
+    shadowOpacity: 0.8,
+    shadowRadius: 12,
+    elevation: 12,
+    borderWidth: 2,
+    borderColor: '#000',
+    marginHorizontal: 3,
+  },
   setlistButton: {
-    backgroundColor: '#4CAF50',
-    padding: 8,
-    borderRadius: 6,
+    backgroundColor: '#1a1a1a',
+    paddingHorizontal: 25,
+    paddingVertical: 9,
+    borderRadius: 0,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 6,
+      height: 6,
+    },
+    shadowOpacity: 0.8,
+    shadowRadius: 12,
+    elevation: 12,
+    borderWidth: 2,
+    borderColor: '#000',
+    marginHorizontal: 3,
   },
   buttonText: {
     color: '#fff',
@@ -2036,8 +2858,416 @@ const styles = StyleSheet.create({
   ledSection: {
     backgroundColor: '#1a1a1a',
     padding: 20,
+    height: height * 0.5,
+    marginTop: -15,
+  },
+  ledScreen: {
+    backgroundColor: '#000',
+    borderRadius: 15,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 6,
+      height: 6,
+    },
+    shadowOpacity: 0.5,
+    shadowRadius: 15,
+    elevation: 15,
+    borderWidth: 3,
+    borderColor: '#333',
+    width: '78%',
+    height: '100%',
+    alignSelf: 'center',
+  },
+  ledHeader: {
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  ledTitle: {
+    color: '#00ff00',
+    fontSize: 18,
+    fontWeight: 'bold',
+    letterSpacing: 2,
+  },
+  ledContent: {
+    alignItems: 'center',
+  },
+  leftButtons: {
+    position: 'absolute',
+    left: 20,
+    top: 20,
+    flexDirection: 'column',
+    gap: 15,
+  },
+  leftButton: {
+    backgroundColor: '#1a1a1a',
+    width: 120,
+    height: 40,
+    borderRadius: 0,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 6,
+      height: 6,
+    },
+    shadowOpacity: 0.8,
+    shadowRadius: 12,
+    elevation: 12,
+    borderWidth: 2,
+    borderColor: '#000',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  leftButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  rightButtons: {
+    position: 'absolute',
+    right: 20,
+    top: 20,
+    flexDirection: 'column',
+    gap: 15,
+    alignItems: 'flex-end',
+  },
+  rightButton: {
+    backgroundColor: '#1a1a1a',
+    width: 120,
+    height: 40,
+    borderRadius: 0,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 6,
+      height: 6,
+    },
+    shadowOpacity: 0.8,
+    shadowRadius: 12,
+    elevation: 12,
+    borderWidth: 2,
+    borderColor: '#000',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  rightButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  padsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 10,
+  },
+  pad: {
+    width: 50,
+    height: 50,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 4,
+      height: 4,
+    },
+    shadowOpacity: 0.6,
+    shadowRadius: 8,
+    elevation: 8,
+    borderWidth: 2,
+    borderColor: '#333',
+  },
+  padText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  playControls: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 15,
+  },
+  playButton: {
+    backgroundColor: '#2a2a2a',
+    width: 50,
+    height: 50,
+    borderRadius: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 2,
+      height: 2,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  playButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  squareButton: {
+    backgroundColor: '#1a1a1a',
+    width: 50,
+    height: 50,
+    borderRadius: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#333',
+    shadowColor: '#fff',
+    shadowOffset: {
+      width: 0,
+      height: -2,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3,
+    borderTopWidth: 2,
+    borderTopColor: '#555',
+  },
+  squareButtonText: {
+    color: '#fff',
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  homeContent: {
+    flexDirection: 'row',
+    flex: 1,
+    padding: 15,
+  },
+  homeLeft: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  homeRight: {
+    flex: 1,
+    paddingLeft: 15,
+  },
+  homeTitle: {
+    color: '#fff',
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 5,
+  },
+  homeSubtitle: {
+    color: '#666',
+    fontSize: 14,
+    fontWeight: 'normal',
+  },
+  setlistTitle: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  setlistInfo: {
+    marginBottom: 15,
+  },
+  setlistName: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 3,
+  },
+  setlistCount: {
+    color: '#666',
+    fontSize: 12,
+  },
+  songsList: {
+    flex: 1,
+  },
+  songItem: {
+    color: '#fff',
+    fontSize: 12,
+    marginBottom: 5,
+    paddingLeft: 5,
+  },
+  setlistRight: {
+    position: 'absolute',
+    right: 20,
+    top: 20,
+    width: 200,
+  },
+  songsListContainer: {
+    position: 'absolute',
+    right: 20,
+    top: 20,
+    width: 250,
+  },
+  songItemAlt: {
+    backgroundColor: '#333',
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+  },
+  rectangleRight: {
+    position: 'absolute',
+    right: 20,
+    top: 20,
+    width: 240,
+    height: 40,
+    backgroundColor: '#333',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  setlistText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  songsContainer: {
+    position: 'absolute',
+    right: 20,
+    top: 70,
+    width: 240,
+  },
+  songRectangle: {
+    width: 240,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  songRectangle1: {
+    backgroundColor: '#333',
+  },
+  songRectangle2: {
+    backgroundColor: '#444',
+  },
+  songRectangle3: {
+    backgroundColor: '#555',
+  },
+  songRectangle4: {
+    backgroundColor: '#444',
+  },
+  songRectangle5: {
+    backgroundColor: '#333',
+  },
+  songText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  ledGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    width: 200,
+    height: 200,
+    backgroundColor: '#111',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 15,
+    borderWidth: 2,
+    borderColor: '#333',
+  },
+  ledPixel: {
+    width: 20,
+    height: 20,
+    backgroundColor: '#00ff00',
+    margin: 1,
+    borderRadius: 2,
+    shadowColor: '#00ff00',
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+    shadowOpacity: 0.8,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  ledInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    width: '100%',
+  },
+  ledInfoText: {
+    color: '#00ff00',
+    fontSize: 12,
+    fontWeight: 'bold',
+    letterSpacing: 1,
+  },
+  slidersSection: {
+    backgroundColor: '#1a1a1a',
+    padding: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#333',
+  },
+  slidersRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    marginBottom: 20,
+  },
+  verticalSlider: {
+    alignItems: 'center',
+    flex: 1,
+    position: 'relative',
+  },
+  sliderLabel: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  sliderTrack: {
+    width: 8,
+    height: 120,
+    backgroundColor: '#333',
+    borderRadius: 4,
+    position: 'relative',
+  },
+  sliderKnob: {
+    position: 'absolute',
+    left: -8,
+    width: 24,
+    height: 24,
+    backgroundColor: '#ccc',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#666',
+    shadowColor: '#0088ff',
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+    shadowOpacity: 0.8,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  sliderNumber: {
+    position: 'absolute',
+    top: -20,
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  sliderButton: {
+    position: 'absolute',
+    top: 80,
+    width: 12,
+    height: 12,
+    backgroundColor: '#0088ff',
+    borderRadius: 2,
+  },
+  soloButton: {
+    alignItems: 'center',
+    backgroundColor: '#333',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 4,
+    alignSelf: 'center',
+  },
+  soloButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   mixerSection: {
     backgroundColor: '#2a2a2a',
@@ -2208,7 +3438,7 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
     bottom: 0,
-    width: '80%',
+    width: '78%',
     backgroundColor: '#2a2a2a',
     borderLeftWidth: 2,
     borderLeftColor: '#2196F3',
@@ -2409,11 +3639,21 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   newSongsButton: {
-    backgroundColor: '#FF6B6B',
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    borderRadius: 8,
-    marginHorizontal: 5,
+    backgroundColor: '#1a1a1a',
+    paddingHorizontal: 25,
+    paddingVertical: 9,
+    borderRadius: 0,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 6,
+      height: 6,
+    },
+    shadowOpacity: 0.8,
+    shadowRadius: 12,
+    elevation: 12,
+    borderWidth: 2,
+    borderColor: '#000',
+    marginHorizontal: 3,
   },
   trackProgressContainer: {
     marginTop: 15,
@@ -2458,18 +3698,38 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   logsButton: {
-    backgroundColor: '#2a4a2a',
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    borderRadius: 8,
-    marginHorizontal: 5,
+    backgroundColor: '#1a1a1a',
+    paddingHorizontal: 25,
+    paddingVertical: 9,
+    borderRadius: 0,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 6,
+      height: 6,
+    },
+    shadowOpacity: 0.8,
+    shadowRadius: 12,
+    elevation: 12,
+    borderWidth: 2,
+    borderColor: '#000',
+    marginHorizontal: 3,
   },
   diagnosticButton: {
-    backgroundColor: '#ff9800',
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    borderRadius: 8,
-    marginHorizontal: 5,
+    backgroundColor: '#1a1a1a',
+    paddingHorizontal: 25,
+    paddingVertical: 9,
+    borderRadius: 0,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 6,
+      height: 6,
+    },
+    shadowOpacity: 0.8,
+    shadowRadius: 12,
+    elevation: 12,
+    borderWidth: 2,
+    borderColor: '#000',
+    marginHorizontal: 3,
   },
   logsContent: {
     flex: 1,
@@ -2629,6 +3889,367 @@ const styles = StyleSheet.create({
   addSongsButtonText: {
     color: '#fff',
     fontSize: 16,
+    fontWeight: 'bold',
+  },
+  // Estilos para multitracks
+  emptyContainer: {
+    alignItems: 'center',
+    padding: 40,
+  },
+  emptySubText: {
+    color: '#666',
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 10,
+  },
+  multitrackButton: {
+    backgroundColor: '#333',
+    borderRadius: 8,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#555',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 2,
+      height: 2,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  multitrackButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 15,
+  },
+  multitrackButtonLeft: {
+    flex: 1,
+  },
+  multitrackButtonTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  multitrackButtonArtist: {
+    color: '#888',
+    fontSize: 14,
+  },
+  multitrackButtonRight: {
+    alignItems: 'flex-end',
+  },
+  multitrackButtonInfo: {
+    color: '#ccc',
+    fontSize: 12,
+    textAlign: 'right',
+  },
+  // Estilos para paneles divididos
+  libraryLeftPanel: {
+    flex: 1,
+    borderRightWidth: 2,
+    borderRightColor: '#444',
+    paddingRight: 15,
+    marginRight: 15,
+  },
+  libraryRightPanel: {
+    flex: 1,
+    paddingLeft: 15,
+  },
+  // Estilos para botones de setlist
+  setlistButton: {
+    backgroundColor: '#333',
+    borderRadius: 8,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#555',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 2,
+      height: 2,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  setlistButtonActive: {
+    backgroundColor: '#444',
+    borderColor: '#00ff88',
+    borderWidth: 2,
+    shadowColor: '#00ff88',
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  setlistButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 15,
+  },
+  setlistButtonLeft: {
+    flex: 1,
+  },
+  setlistButtonTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  setlistButtonSongs: {
+    color: '#888',
+    fontSize: 14,
+  },
+  setlistButtonRight: {
+    alignItems: 'flex-end',
+  },
+  setlistButtonInfo: {
+    color: '#ccc',
+    fontSize: 12,
+    textAlign: 'right',
+  },
+  // Estilos para selector de setlists
+  setlistHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  setlistHeaderButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  setlistSelectorButton: {
+    backgroundColor: '#2196F3',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 4,
+  },
+  setlistSelectorButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  multitrackHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  multitrackContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#333',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#555',
+  },
+  multitrackButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  multitrackInfo: {
+    flex: 1,
+    marginRight: 10,
+  },
+  multitrackTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  multitrackArtist: {
+    color: '#ccc',
+    fontSize: 14,
+    marginBottom: 4,
+  },
+  multitrackDetails: {
+    color: '#888',
+    fontSize: 12,
+  },
+  downloadMultitrackButton: {
+    backgroundColor: '#1a1a1a',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#333',
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  downloadMultitrackButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  addToSetlistButton: {
+    backgroundColor: '#00ff88',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#00ff88',
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addToSetlistButtonText: {
+    color: '#000',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  addToSetlistButtonDisabled: {
+    backgroundColor: '#666',
+    borderColor: '#666',
+  },
+  addToSetlistButtonTextDisabled: {
+    color: '#999',
+  },
+  downloadProgressContainer: {
+    backgroundColor: '#2a2a2a',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: '#444',
+  },
+  downloadProgressText: {
+    color: '#fff',
+    fontSize: 14,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  downloadProgressBar: {
+    height: 8,
+    backgroundColor: '#444',
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  downloadProgressFill: {
+    height: '100%',
+    backgroundColor: '#00ff88',
+    borderRadius: 4,
+  },
+  downloadProgressPercent: {
+    color: '#00ff88',
+    fontSize: 12,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  setlistSelectorModal: {
+    backgroundColor: '#2a2a2a',
+    borderRadius: 12,
+    margin: 20,
+    maxHeight: '80%',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  setlistSelectorContent: {
+    maxHeight: 400,
+    padding: 10,
+  },
+  setlistSelectorItem: {
+    backgroundColor: '#333',
+    borderRadius: 8,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#555',
+  },
+  setlistSelectorItemActive: {
+    backgroundColor: '#444',
+    borderColor: '#2196F3',
+  },
+  setlistSelectorItemContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 15,
+  },
+  setlistSelectorItemLeft: {
+    flex: 1,
+  },
+  setlistSelectorItemTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  setlistSelectorItemSongs: {
+    color: '#888',
+    fontSize: 14,
+  },
+  setlistSelectorItemRight: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 30,
+  },
+  setlistSelectorItemActiveText: {
+    color: '#2196F3',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  // Estilos para botones de eliminar setlist
+  setlistButtonContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  setlistDeleteButton: {
+    backgroundColor: '#ff4444',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    marginLeft: 8,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 1,
+      height: 1,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  setlistDeleteButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  setlistSelectorItemContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  setlistSelectorDeleteButton: {
+    backgroundColor: '#ff4444',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 4,
+    marginLeft: 8,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 1,
+      height: 1,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  setlistSelectorDeleteButtonText: {
+    color: '#fff',
+    fontSize: 12,
     fontWeight: 'bold',
   },
 });

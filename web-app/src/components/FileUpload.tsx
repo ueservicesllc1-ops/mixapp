@@ -11,12 +11,7 @@ interface FileUploadProps {
 }
 
 const FileUpload: React.FC<FileUploadProps> = ({ userId, onUploadComplete }) => {
-  return (
-    <ZipUpload 
-      userId={userId} 
-      onUploadComplete={onUploadComplete}
-    />
-  );
+  return <ZipUpload />;
 };
 
 export default FileUpload;
