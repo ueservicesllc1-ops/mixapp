@@ -1,14 +1,41 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
 
+interface AudioTrack {
+  id: string;
+  name: string;
+  fileUrl: string;
+  localPath?: string;
+  volume?: number;
+  muted?: boolean;
+}
+
 interface DigitalMixerProps {
   isVisible: boolean;
   onClose: () => void;
+  selectedSong?: {
+    id: string;
+    title: string;
+    tracks: AudioTrack[];
+  } | null;
+  onTrackVolumeChange?: (trackId: string, volume: number) => void;
+  onTrackMuteToggle?: (trackId: string, muted: boolean) => void;
+  onTrackSoloToggle?: (trackId: string, solo: boolean) => void;
 }
 
 const { width, height } = Dimensions.get('window');
 
-const DigitalMixer: React.FC<DigitalMixerProps> = ({ isVisible, onClose }) => {
+const DigitalMixer: React.FC<DigitalMixerProps> = ({ 
+  isVisible, 
+  onClose, 
+  selectedSong, 
+  onTrackVolumeChange, 
+  onTrackMuteToggle, 
+  onTrackSoloToggle 
+}) => {
+  console.log('🎛️ DigitalMixer renderizado');
+  console.log('🎵 selectedSong:', selectedSong);
+  console.log('🎵 selectedSong.tracks:', selectedSong?.tracks);
   const [faderValues, setFaderValues] = useState({
     channel1: 50,
     channel2: 50,
@@ -63,8 +90,9 @@ const DigitalMixer: React.FC<DigitalMixerProps> = ({ isVisible, onClose }) => {
     setButtonStates(prev => ({ ...prev, [button]: !prev[button] }));
   };
 
-  return (
-    <View style={styles.container}>
+  try {
+    return (
+      <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>DIGITAL MIXER</Text>
@@ -77,69 +105,145 @@ const DigitalMixer: React.FC<DigitalMixerProps> = ({ isVisible, onClose }) => {
       <View style={styles.mixerSurface}>
         {/* Channel Strips */}
         <View style={styles.channelStrips}>
-          {[1, 2, 3, 4, 5, 6, 7, 8].map(channel => (
-            <View key={channel} style={styles.channelStrip}>
-              {/* Channel Label */}
-              <Text style={styles.channelLabel}>CH {channel}</Text>
+          {selectedSong && selectedSong.tracks ? (
+            // Mostrar tracks de la canción seleccionada
+            selectedSong.tracks.slice(0, 8).map((track, index) => {
+              const channel = index + 1;
+              const trackVolume = track.volume || 50;
+              const isMuted = track.muted || false;
+              const isSolo = buttonStates[`solo${channel}` as keyof typeof buttonStates] || false;
               
-              {/* EQ Knobs */}
-              <View style={styles.eqSection}>
-                <View style={styles.knobContainer}>
-                  <View style={styles.knob}>
-                    <View style={[styles.knobIndicator, { transform: [{ rotate: `${knobValues.low * 3.6 - 180}deg` }] }]} />
+              return (
+                <View key={track.id} style={styles.channelStrip}>
+                  {/* Channel Label */}
+                  <Text style={styles.channelLabel}>{track.name.toUpperCase()}</Text>
+              
+                  {/* EQ Knobs */}
+                  <View style={styles.eqSection}>
+                    <View style={styles.knobContainer}>
+                      <View style={styles.knob}>
+                        <View style={[styles.knobIndicator, { transform: [{ rotate: `${knobValues.low * 3.6 - 180}deg` }] }]} />
+                      </View>
+                      <Text style={styles.knobLabel}>LOW</Text>
+                    </View>
+                    <View style={styles.knobContainer}>
+                      <View style={styles.knob}>
+                        <View style={[styles.knobIndicator, { transform: [{ rotate: `${knobValues.mid * 3.6 - 180}deg` }] }]} />
+                      </View>
+                      <Text style={styles.knobLabel}>MID</Text>
+                    </View>
+                    <View style={styles.knobContainer}>
+                      <View style={styles.knob}>
+                        <View style={[styles.knobIndicator, { transform: [{ rotate: `${knobValues.high * 3.6 - 180}deg` }] }]} />
+                      </View>
+                      <Text style={styles.knobLabel}>HIGH</Text>
+                    </View>
                   </View>
-                  <Text style={styles.knobLabel}>LOW</Text>
-                </View>
-                <View style={styles.knobContainer}>
-                  <View style={styles.knob}>
-                    <View style={[styles.knobIndicator, { transform: [{ rotate: `${knobValues.mid * 3.6 - 180}deg` }] }]} />
-                  </View>
-                  <Text style={styles.knobLabel}>MID</Text>
-                </View>
-                <View style={styles.knobContainer}>
-                  <View style={styles.knob}>
-                    <View style={[styles.knobIndicator, { transform: [{ rotate: `${knobValues.high * 3.6 - 180}deg` }] }]} />
-                  </View>
-                  <Text style={styles.knobLabel}>HIGH</Text>
-                </View>
-              </View>
 
-              {/* Fader */}
-              <View style={styles.faderContainer}>
-                <View style={styles.faderTrack}>
-                  <View 
+                  {/* Fader */}
+                  <View style={styles.faderContainer}>
+                    <View style={styles.faderTrack}>
+                      <View 
+                        style={[
+                          styles.faderKnob, 
+                          { bottom: `${trackVolume}%` }
+                        ]} 
+                      />
+                    </View>
+                    <Text style={styles.faderValue}>{trackVolume}</Text>
+                  </View>
+
+                  {/* Channel Buttons */}
+                  <View style={styles.channelButtons}>
+                    <TouchableOpacity 
+                      style={[
+                        styles.channelButton, 
+                        isMuted && styles.buttonActive
+                      ]}
+                      onPress={() => {
+                        const newMuted = !isMuted;
+                        onTrackMuteToggle?.(track.id, newMuted);
+                        toggleButton(`mute${channel}`);
+                      }}
+                    >
+                      <Text style={styles.channelButtonText}>MUTE</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={[
+                        styles.channelButton, 
+                        isSolo && styles.buttonActive
+                      ]}
+                      onPress={() => {
+                        const newSolo = !isSolo;
+                        onTrackSoloToggle?.(track.id, newSolo);
+                        toggleButton(`solo${channel}`);
+                      }}
+                    >
+                      <Text style={styles.channelButtonText}>SOLO</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            })
+          ) : (
+            // Mostrar canales vacíos si no hay canción seleccionada
+            [1, 2, 3, 4, 5, 6, 7, 8].map(channel => (
+              <View key={channel} style={styles.channelStrip}>
+                <Text style={styles.channelLabel}>CH {channel}</Text>
+                <View style={styles.eqSection}>
+                  <View style={styles.knobContainer}>
+                    <View style={styles.knob}>
+                      <View style={[styles.knobIndicator, { transform: [{ rotate: `${knobValues.low * 3.6 - 180}deg` }] }]} />
+                    </View>
+                    <Text style={styles.knobLabel}>LOW</Text>
+                  </View>
+                  <View style={styles.knobContainer}>
+                    <View style={styles.knob}>
+                      <View style={[styles.knobIndicator, { transform: [{ rotate: `${knobValues.mid * 3.6 - 180}deg` }] }]} />
+                    </View>
+                    <Text style={styles.knobLabel}>MID</Text>
+                  </View>
+                  <View style={styles.knobContainer}>
+                    <View style={styles.knob}>
+                      <View style={[styles.knobIndicator, { transform: [{ rotate: `${knobValues.high * 3.6 - 180}deg` }] }]} />
+                    </View>
+                    <Text style={styles.knobLabel}>HIGH</Text>
+                  </View>
+                </View>
+                <View style={styles.faderContainer}>
+                  <View style={styles.faderTrack}>
+                    <View 
+                      style={[
+                        styles.faderKnob, 
+                        { bottom: `${faderValues[`channel${channel}` as keyof typeof faderValues]}%` }
+                      ]} 
+                    />
+                  </View>
+                  <Text style={styles.faderValue}>{faderValues[`channel${channel}` as keyof typeof faderValues]}</Text>
+                </View>
+                <View style={styles.channelButtons}>
+                  <TouchableOpacity 
                     style={[
-                      styles.faderKnob, 
-                      { bottom: `${faderValues[`channel${channel}` as keyof typeof faderValues]}%` }
-                    ]} 
-                  />
+                      styles.channelButton, 
+                      buttonStates[`mute${channel}` as keyof typeof buttonStates] && styles.buttonActive
+                    ]}
+                    onPress={() => toggleButton(`mute${channel}`)}
+                  >
+                    <Text style={styles.channelButtonText}>MUTE</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[
+                      styles.channelButton, 
+                      buttonStates[`solo${channel}` as keyof typeof buttonStates] && styles.buttonActive
+                    ]}
+                    onPress={() => toggleButton(`solo${channel}`)}
+                  >
+                    <Text style={styles.channelButtonText}>SOLO</Text>
+                  </TouchableOpacity>
                 </View>
-                <Text style={styles.faderValue}>{faderValues[`channel${channel}` as keyof typeof faderValues]}</Text>
               </View>
-
-              {/* Channel Buttons */}
-              <View style={styles.channelButtons}>
-                <TouchableOpacity 
-                  style={[
-                    styles.channelButton, 
-                    buttonStates[`mute${channel}` as keyof typeof buttonStates] && styles.buttonActive
-                  ]}
-                  onPress={() => toggleButton(`mute${channel}`)}
-                >
-                  <Text style={styles.channelButtonText}>MUTE</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[
-                    styles.channelButton, 
-                    buttonStates[`solo${channel}` as keyof typeof buttonStates] && styles.buttonActive
-                  ]}
-                  onPress={() => toggleButton(`solo${channel}`)}
-                >
-                  <Text style={styles.channelButtonText}>SOLO</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ))}
+            ))
+          )}
         </View>
 
         {/* Master Section */}
@@ -214,7 +318,25 @@ const DigitalMixer: React.FC<DigitalMixerProps> = ({ isVisible, onClose }) => {
         </View>
       </View>
     </View>
-  );
+    );
+  } catch (error) {
+    console.error('❌ Error en DigitalMixer:', error);
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>DIGITAL MIXER</Text>
+          <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+            <Text style={styles.closeButtonText}>×</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.mixerSurface}>
+          <Text style={{ color: '#fff', textAlign: 'center', marginTop: 50 }}>
+            Error cargando mixer: {error instanceof Error ? error.message : 'Error desconocido'}
+          </Text>
+        </View>
+      </View>
+    );
+  }
 };
 
 const styles = StyleSheet.create({

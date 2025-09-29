@@ -25,10 +25,12 @@ import RNFS from 'react-native-fs';
 import ReactNativeBlobUtil from 'react-native-blob-util';
 import { useAuth } from '../components/AuthProvider';
 import firestoreService from '../services/firestoreService';
+import firestore, { collection, query, where, getDocs } from '@react-native-firebase/firestore';
 import SimpleOfflineService from '../services/simpleOfflineService';
 import LEDScreenUpload from '../components/LEDScreenUpload';
 import LEDDisplay from '../components/LEDDisplay';
 import AudioLibrary from '../components/AudioLibrary';
+import DigitalMixer from '../components/DigitalMixer';
 import audioPlayerService from '../services/audioPlayerService';
 
 const { width, height } = Dimensions.get('window');
@@ -59,6 +61,7 @@ const MainScreen: React.FC = () => {
   const [selectedSetlistSongs, setSelectedSetlistSongs] = useState<any[]>([]);
   const [selectedSong, setSelectedSong] = useState<any>(null);
   const [currentSongIndex, setCurrentSongIndex] = useState(0);
+  const [showDigitalMixer, setShowDigitalMixer] = useState(false);
   const [showCreateSetlistModal, setShowCreateSetlistModal] = useState(false);
   const [newSetlistName, setNewSetlistName] = useState('');
   const [showDownloadedSongsModal, setShowDownloadedSongsModal] = useState(false);
@@ -1608,14 +1611,96 @@ const MainScreen: React.FC = () => {
     audioPlayerService.stop();
     setIsPlaying(false);
     
-    // Cargar la nueva canción
+    // Buscar los datos completos de la canción en la colección multitracks
     try {
-      await audioPlayerService.loadSong(song);
-      console.log('✅ Canción cargada exitosamente');
+      console.log('🔍 Buscando canción en multitracks:', song.title);
+      
+      // Buscar por songName en la colección multitracks
+      const multitracksQuery = query(
+        collection(firestore(), 'multitracks'),
+        where('songName', '==', song.title)
+      );
+      
+      const multitracksSnapshot = await getDocs(multitracksQuery);
+      
+      if (!multitracksSnapshot.empty) {
+        const multitrackDoc = multitracksSnapshot.docs[0];
+        const multitrackData = multitrackDoc.data();
+        
+        console.log('✅ Datos encontrados en multitracks:', multitrackData);
+        
+        // Crear objeto song con datos de multitracks
+        const songWithTracks = {
+          ...song,
+          tracks: multitrackData.tracks || []
+        };
+        
+        console.log('🎵 Tracks encontrados:', songWithTracks.tracks.length);
+        
+        // Actualizar selectedSong con los tracks para que esté disponible en DigitalMixer
+        setSelectedSong(songWithTracks);
+        
+        await audioPlayerService.loadSong(songWithTracks);
+        console.log('✅ Canción cargada exitosamente');
+      } else {
+        console.log('⚠️ No se encontró la canción en multitracks, intentando cargar sin tracks');
+        await audioPlayerService.loadSong(song);
+      }
     } catch (error) {
       console.error('❌ Error cargando canción:', error);
       Alert.alert('Error', 'No se pudo cargar la canción. Verifica que los archivos estén disponibles.');
     }
+  };
+
+  // Función para eliminar una canción del setlist
+  const handleDeleteSongFromSetlist = async (song: any, index: number) => {
+    if (!selectedSetlist) {
+      Alert.alert('Error', 'No hay setlist seleccionada');
+      return;
+    }
+
+    Alert.alert(
+      'Eliminar Canción',
+      `¿Estás seguro de que quieres eliminar "${song.title}" del setlist "${selectedSetlist.name}"?`,
+      [
+        {
+          text: 'Cancelar',
+          style: 'cancel',
+        },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              console.log('🗑️ Eliminando canción del setlist:', song.title);
+              
+              // Eliminar de Firebase
+              await firestoreService.removeSongFromSetlist(selectedSetlist.id, song.id);
+              
+              // Actualizar la lista local
+              setSelectedSetlistSongs(prev => prev.filter((_, i) => i !== index));
+              
+              // También actualizar currentSetlistSongs si existe
+              setCurrentSetlistSongs(prev => prev.filter(s => s.id !== song.id));
+              
+              // Si la canción eliminada era la seleccionada, limpiar selección
+              if (selectedSong && selectedSong.id === song.id) {
+                setSelectedSong(null);
+                setCurrentSongIndex(0);
+                audioPlayerService.stop();
+                setIsPlaying(false);
+              }
+              
+              console.log('✅ Canción eliminada exitosamente');
+              Alert.alert('Éxito', 'Canción eliminada del setlist');
+            } catch (error) {
+              console.error('❌ Error eliminando canción:', error);
+              Alert.alert('Error', 'No se pudo eliminar la canción del setlist');
+            }
+          },
+        },
+      ]
+    );
   };
 
   // Función para manejar play/pause
@@ -1631,11 +1716,7 @@ const MainScreen: React.FC = () => {
         setIsPlaying(false);
         console.log('⏸️ Pausando reproducción');
       } else {
-        if (audioPlayerService.getIsPlaying()) {
-          audioPlayerService.resume();
-        } else {
-          await audioPlayerService.play();
-        }
+        audioPlayerService.play();
         setIsPlaying(true);
         console.log('▶️ Iniciando reproducción');
       }
@@ -1671,6 +1752,22 @@ const MainScreen: React.FC = () => {
     const prevSong = selectedSetlistSongs[prevIndex];
     await handleSongSelection(prevSong, prevIndex);
     console.log('⏮️ Canción anterior:', prevSong.title);
+  };
+
+  // Funciones para controlar tracks desde el mixer
+  const handleTrackVolumeChange = (trackId: string, volume: number) => {
+    console.log('🎚️ Cambiando volumen del track:', trackId, 'a', volume);
+    audioPlayerService.setTrackVolume(trackId, volume / 100); // Convertir de 0-100 a 0-1
+  };
+
+  const handleTrackMuteToggle = (trackId: string, muted: boolean) => {
+    console.log('🔇 Mute/Unmute track:', trackId, muted ? 'MUTED' : 'UNMUTED');
+    audioPlayerService.setTrackMuted(trackId, muted);
+  };
+
+  const handleTrackSoloToggle = (trackId: string, solo: boolean) => {
+    console.log('🎤 Solo track:', trackId, solo ? 'SOLO' : 'UNSOLO');
+    // Implementar lógica de solo aquí si es necesario
   };
 
   return (
@@ -1715,21 +1812,28 @@ const MainScreen: React.FC = () => {
                 ].filter(Boolean);
                 
                 return (
-                  <TouchableOpacity 
-                    key={song.id || index} 
-                    style={rectangleStyle}
-                    onPress={() => handleSongSelection(song, index)}
-                  >
-                    <Text style={[
-                      styles.songText,
-                      selectedSong?.id === song.id && styles.songTextSelected
-                    ]}>
-                      {`${index + 1}. ${song.title?.toUpperCase() || 'CANCIÓN'}`}
-                    </Text>
-                    {selectedSong?.id === song.id && (
-                      <Text style={styles.selectedIndicator}>✓</Text>
-                    )}
-                  </TouchableOpacity>
+                  <View key={song.id || index} style={styles.songItemRow}>
+                    <TouchableOpacity 
+                      style={rectangleStyle}
+                      onPress={() => handleSongSelection(song, index)}
+                    >
+                      <Text style={[
+                        styles.songText,
+                        selectedSong?.id === song.id && styles.songTextSelected
+                      ]}>
+                        {`${index + 1}. ${song.title?.toUpperCase() || 'CANCIÓN'}`}
+                      </Text>
+                      {selectedSong?.id === song.id && (
+                        <Text style={styles.selectedIndicator}>✓</Text>
+                      )}
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={styles.deleteSongButton}
+                      onPress={() => handleDeleteSongFromSetlist(song, index)}
+                    >
+                      <Text style={styles.deleteSongButtonText}>🗑️</Text>
+                    </TouchableOpacity>
+                  </View>
                 );
               })}
             </View>
@@ -1832,67 +1936,56 @@ const MainScreen: React.FC = () => {
         </View>
       </View>
 
-      {/* Vertical Sliders Section */}
-      <View style={styles.slidersSection}>
-        <View style={styles.slidersRow}>
-          <View style={styles.verticalSlider}>
-            <Text style={styles.sliderLabel}>MUTE</Text>
-            <View style={styles.sliderTrack}>
-              <View style={[styles.sliderKnob, {top: 10}]} />
-            </View>
-          </View>
-          
-          <View style={styles.verticalSlider}>
-            <Text style={styles.sliderLabel}>BASS</Text>
-            <View style={styles.sliderTrack}>
-              <View style={[styles.sliderKnob, {top: 50}]} />
-            </View>
-          </View>
-          
-          <View style={styles.verticalSlider}>
-            <Text style={styles.sliderLabel}>SYNTH</Text>
-            <View style={styles.sliderTrack}>
-              <View style={[styles.sliderKnob, {top: 60}]} />
-            </View>
-          </View>
-          
-          <View style={styles.verticalSlider}>
-            <Text style={styles.sliderLabel}>SYNTH</Text>
-            <View style={styles.sliderTrack}>
-              <View style={[styles.sliderKnob, {top: 80}]} />
-            </View>
-          </View>
-          
-          <View style={styles.verticalSlider}>
-            <Text style={styles.sliderLabel}>FOCUS</Text>
-            <View style={styles.sliderTrack}>
-              <View style={[styles.sliderKnob, {top: 45}]} />
-            </View>
-          </View>
-          
-          <View style={styles.verticalSlider}>
-            <Text style={styles.sliderLabel}>VOCALS</Text>
-            <View style={styles.sliderTrack}>
-              <View style={[styles.sliderKnob, {top: 55}]} />
-            </View>
-            <Text style={styles.sliderNumber}>6</Text>
-          </View>
-          
-          <View style={styles.verticalSlider}>
-            <Text style={styles.sliderLabel}>COMS</Text>
-            <View style={styles.sliderTrack}>
-              <View style={[styles.sliderKnob, {top: 30}]} />
-            </View>
-            <Text style={styles.sliderNumber}>9</Text>
-            <View style={styles.sliderButton} />
-            <View style={[styles.sliderButton, {top: 100}]} />
+      {/* Track Sliders Section */}
+      {selectedSong && selectedSong.tracks && selectedSong.tracks.length > 0 && (
+        <View style={styles.trackSlidersSection}>
+          <Text style={styles.trackSlidersTitle}>TRACKS - {selectedSong.title}</Text>
+          <View style={styles.trackSlidersRow}>
+            {selectedSong.tracks.map((track, index) => (
+              <View key={`track-${track.id}-${index}`} style={styles.trackSlider}>
+                <Text style={styles.trackLabel}>{track.name}</Text>
+                <TouchableOpacity 
+                  style={styles.trackPlayButton}
+                  onPress={() => {
+                    console.log(`🎵 Reproduciendo track individual: ${track.name}`);
+                    console.log(`🎵 Track ID:`, track.id);
+                    console.log(`🎵 Track completo:`, track);
+                    // Reproducir solo este track
+                    audioPlayerService.playTrack(track.id);
+                  }}
+                >
+                  <Text style={styles.trackPlayButtonText}>▶</Text>
+                </TouchableOpacity>
+                <View style={styles.trackSliderContainer}>
+                  <View style={styles.trackSliderTrack}>
+                    <View 
+                      style={[
+                        styles.trackSliderKnob, 
+                        { bottom: `${track.volume || 50}%` }
+                      ]} 
+                    />
+                  </View>
+                  <Text style={styles.trackSliderValue}>{track.volume || 50}</Text>
+                </View>
+                <TouchableOpacity 
+                  style={[
+                    styles.trackMuteButton,
+                    track.muted && styles.trackMuteButtonActive
+                  ]}
+                  onPress={() => {
+                    console.log(`🔇 Mute toggle para track: ${track.name}`);
+                    const newMuted = !track.muted;
+                    audioPlayerService.setTrackMuted(track.id, newMuted);
+                    // Actualizar el estado local si es necesario
+                  }}
+                >
+                  <Text style={styles.trackMuteButtonText}>MUTE</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
           </View>
         </View>
-        
-        <View style={styles.soloButton}>
-          <Text style={styles.soloButtonText}>SOLO</Text>
-        </View>
-      </View>
+      )}
 
 
 
@@ -1989,10 +2082,7 @@ const MainScreen: React.FC = () => {
                         </TouchableOpacity>
                                 <TouchableOpacity 
                           style={styles.deleteButton}
-                          onPress={() => {
-                            // Aquí puedes agregar funcionalidad para eliminar de setlist
-                            console.log('Eliminando de setlist:', song.title);
-                          }}
+                          onPress={() => handleDeleteSongFromSetlist(song, index)}
                         >
                           <Text style={styles.deleteButtonText}>🗑️</Text>
                   </TouchableOpacity>
@@ -2840,6 +2930,16 @@ const MainScreen: React.FC = () => {
           </View>
         </Modal>
       )}
+
+      {/* Digital Mixer */}
+      <DigitalMixer 
+        isVisible={showDigitalMixer}
+        onClose={() => setShowDigitalMixer(false)}
+        selectedSong={selectedSong}
+        onTrackVolumeChange={handleTrackVolumeChange}
+        onTrackMuteToggle={handleTrackMuteToggle}
+        onTrackSoloToggle={handleTrackSoloToggle}
+      />
     </SafeAreaView>
   );
 };
@@ -4496,6 +4596,122 @@ const styles = StyleSheet.create({
   },
   timeText: {
     color: '#888',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  // Track Sliders Styles
+  trackSlidersSection: {
+    backgroundColor: '#1a1a1a',
+    padding: 20,
+    borderTopWidth: 2,
+    borderTopColor: '#333',
+  },
+  trackSlidersTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 15,
+    letterSpacing: 1,
+  },
+  trackSlidersRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
+  trackSlider: {
+    alignItems: 'center',
+    margin: 10,
+    padding: 15,
+    backgroundColor: '#2a2a2a',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#444',
+    minWidth: 120,
+  },
+  trackLabel: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  trackPlayButton: {
+    backgroundColor: '#4CAF50',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  trackPlayButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  trackSliderContainer: {
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  trackSliderTrack: {
+    width: 20,
+    height: 100,
+    backgroundColor: '#333',
+    borderRadius: 10,
+    position: 'relative',
+    marginBottom: 5,
+  },
+  trackSliderKnob: {
+    position: 'absolute',
+    width: 24,
+    height: 24,
+    backgroundColor: '#4CAF50',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#fff',
+    left: -2,
+  },
+  trackSliderValue: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  trackMuteButton: {
+    backgroundColor: '#666',
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: '#888',
+  },
+  trackMuteButtonActive: {
+    backgroundColor: '#f44336',
+    borderColor: '#ff6b6b',
+  },
+  trackMuteButtonText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  // Estilos para botón de eliminar canción
+  songItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  deleteSongButton: {
+    backgroundColor: '#ff4444',
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  deleteSongButtonText: {
+    color: '#fff',
     fontSize: 14,
     fontWeight: 'bold',
   },

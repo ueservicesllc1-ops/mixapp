@@ -699,6 +699,22 @@ class FirestoreService {
     }
   }
 
+  // Eliminar una canción de un setlist
+  async removeSongFromSetlist(setlistId: string, songId: string): Promise<void> {
+    try {
+      console.log('🗑️ Eliminando canción del setlist:', { setlistId, songId });
+      
+      // Eliminar el documento de la canción del setlist
+      const songRef = doc(this.db, 'setlists', setlistId, 'songs', songId);
+      await deleteDoc(songRef);
+      
+      console.log('✅ Canción eliminada del setlist exitosamente');
+    } catch (error) {
+      console.error('❌ Error eliminando canción del setlist:', error);
+      throw error;
+    }
+  }
+
 }
 
 export default new FirestoreService();
