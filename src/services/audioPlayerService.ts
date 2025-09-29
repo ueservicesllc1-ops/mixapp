@@ -56,11 +56,14 @@ class AudioPlayerService {
           fullUrl = `https://mixercur.s3.us-east-005.backblazeb2.com${fullUrl}`;
         }
         
+        const trackId = `track_${index}`;
         console.log(`🔗 Track ${index} URL original:`, track.downloadUrl);
         console.log(`🔗 Track ${index} URL completa:`, fullUrl);
+        console.log(`🎵 Track ${index} ID generado:`, trackId);
+        console.log(`🎵 Track ${index} nombre:`, track.name);
         
         return {
-          id: `track_${index}`,
+          id: trackId,
           name: track.name,
           fileUrl: fullUrl,
           localPath: fullUrl,
@@ -433,6 +436,11 @@ class AudioPlayerService {
       }
     });
     this.sounds.clear();
+  }
+
+  // Obtener la canción actual
+  getCurrentSong(): Song | null {
+    return this.currentSong;
   }
 
   // Limpiar recursos

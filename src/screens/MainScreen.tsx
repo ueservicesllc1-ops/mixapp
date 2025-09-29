@@ -787,7 +787,7 @@ const MainScreen: React.FC = () => {
           timeSignature: multitrack.timeSignature,
           isLocal: true, // Indicador de que está en almacenamiento local
           localPath: downloadFolder, // Ruta local del proyecto
-          tracks: multitrack.tracks.map(track => ({
+          tracks: multitrack.tracks.map((track: any) => ({
             ...track,
             localPath: `${downloadFolder}${multitrack.id}_${track.name}` // Ruta local de cada track
           })),
@@ -811,7 +811,7 @@ const MainScreen: React.FC = () => {
             timeSignature: multitrack.timeSignature,
             isLocal: true,
             localPath: downloadFolder,
-            tracks: multitrack.tracks.map(track => ({
+            tracks: multitrack.tracks.map((track: any) => ({
               ...track,
               localPath: `${downloadFolder}${multitrack.id}_${track.name}`
             })),
@@ -1628,12 +1628,16 @@ const MainScreen: React.FC = () => {
         const multitrackData = multitrackDoc.data();
         
         console.log('✅ Datos encontrados en multitracks:', multitrackData);
+        console.log('🎵 Tracks de multitracks:', multitrackData.tracks);
         
         // Crear objeto song con datos de multitracks
         const songWithTracks = {
           ...song,
           tracks: multitrackData.tracks || []
         };
+        
+        console.log('🎵 SongWithTracks creado:', songWithTracks);
+        console.log('🎵 Tracks en songWithTracks:', songWithTracks.tracks);
         
         console.log('🎵 Tracks encontrados:', songWithTracks.tracks.length);
         
@@ -1642,6 +1646,13 @@ const MainScreen: React.FC = () => {
         
         await audioPlayerService.loadSong(songWithTracks);
         console.log('✅ Canción cargada exitosamente');
+        
+        // Obtener los tracks procesados del audioPlayerService para asegurar IDs correctos
+        const currentSong = audioPlayerService.getCurrentSong();
+        if (currentSong && currentSong.tracks) {
+          console.log('🎵 Actualizando selectedSong con tracks procesados:', currentSong.tracks);
+          setSelectedSong(currentSong);
+        }
       } else {
         console.log('⚠️ No se encontró la canción en multitracks, intentando cargar sin tracks');
         await audioPlayerService.loadSong(song);
@@ -1941,7 +1952,7 @@ const MainScreen: React.FC = () => {
         <View style={styles.trackSlidersSection}>
           <Text style={styles.trackSlidersTitle}>TRACKS - {selectedSong.title}</Text>
           <View style={styles.trackSlidersRow}>
-            {selectedSong.tracks.map((track, index) => (
+            {selectedSong.tracks.map((track: any, index: number) => (
               <View key={`track-${track.id}-${index}`} style={styles.trackSlider}>
                 <Text style={styles.trackLabel}>{track.name}</Text>
                 <TouchableOpacity 
@@ -1950,8 +1961,12 @@ const MainScreen: React.FC = () => {
                     console.log(`🎵 Reproduciendo track individual: ${track.name}`);
                     console.log(`🎵 Track ID:`, track.id);
                     console.log(`🎵 Track completo:`, track);
-                    // Reproducir solo este track
-                    audioPlayerService.playTrack(track.id);
+                    console.log(`🎵 selectedSong tracks:`, selectedSong.tracks);
+                    if (track.id) {
+                      audioPlayerService.playTrack(track.id);
+                    } else {
+                      console.log('❌ Track ID es undefined, no se puede reproducir');
+                    }
                   }}
                 >
                   <Text style={styles.trackPlayButtonText}>▶</Text>
@@ -3116,7 +3131,7 @@ const styles = StyleSheet.create({
   ledSection: {
     backgroundColor: '#1a1a1a',
     padding: 20,
-    height: height * 0.5,
+    height: height * 0.4,
     marginTop: -15,
   },
   ledScreen: {
