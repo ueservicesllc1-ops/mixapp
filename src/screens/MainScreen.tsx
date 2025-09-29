@@ -56,6 +56,8 @@ const MainScreen: React.FC = () => {
   const [setlistSongs, setSetlistSongs] = useState<any[]>([]);
   const [selectedSetlist, setSelectedSetlist] = useState<any>(null);
   const [selectedSetlistSongs, setSelectedSetlistSongs] = useState<any[]>([]);
+  const [selectedSong, setSelectedSong] = useState<any>(null);
+  const [currentSongIndex, setCurrentSongIndex] = useState(0);
   const [showCreateSetlistModal, setShowCreateSetlistModal] = useState(false);
   const [newSetlistName, setNewSetlistName] = useState('');
   const [showDownloadedSongsModal, setShowDownloadedSongsModal] = useState(false);
@@ -1576,6 +1578,52 @@ const MainScreen: React.FC = () => {
     }
   };
 
+  // Función para seleccionar una canción del setlist
+  const handleSongSelection = (song: any, index: number) => {
+    console.log('🎵 Canción seleccionada:', song.title);
+    setSelectedSong(song);
+    setCurrentSongIndex(index);
+    setIsPlaying(false); // Resetear estado de reproducción
+  };
+
+  // Función para manejar play/pause
+  const handlePlayPause = () => {
+    if (!selectedSong) {
+      Alert.alert('⚠️ Selecciona una canción', 'Primero selecciona una canción del setlist para reproducir');
+      return;
+    }
+    
+    setIsPlaying(!isPlaying);
+    console.log(isPlaying ? '⏸️ Pausando reproducción' : '▶️ Iniciando reproducción');
+  };
+
+  // Función para detener reproducción
+  const handleStop = () => {
+    setIsPlaying(false);
+    setCurrentTime('00:00');
+    console.log('⏹️ Deteniendo reproducción');
+  };
+
+  // Función para siguiente canción
+  const handleNextSong = () => {
+    if (selectedSetlistSongs.length === 0) return;
+    
+    const nextIndex = (currentSongIndex + 1) % selectedSetlistSongs.length;
+    const nextSong = selectedSetlistSongs[nextIndex];
+    handleSongSelection(nextSong, nextIndex);
+    console.log('⏭️ Siguiente canción:', nextSong.title);
+  };
+
+  // Función para canción anterior
+  const handlePreviousSong = () => {
+    if (selectedSetlistSongs.length === 0) return;
+    
+    const prevIndex = currentSongIndex === 0 ? selectedSetlistSongs.length - 1 : currentSongIndex - 1;
+    const prevSong = selectedSetlistSongs[prevIndex];
+    handleSongSelection(prevSong, prevIndex);
+    console.log('⏮️ Canción anterior:', prevSong.title);
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       {/* BOTÓN CENTRAL ELIMINADO */}
@@ -1614,19 +1662,80 @@ const MainScreen: React.FC = () => {
                   index === 2 && styles.songRectangle3,
                   index === 3 && styles.songRectangle4,
                   index === 4 && styles.songRectangle5,
+                  selectedSong?.id === song.id && styles.songRectangleSelected,
                 ].filter(Boolean);
                 
                 return (
-                  <View key={song.id || index} style={rectangleStyle}>
-                    <Text style={styles.songText}>
+                  <TouchableOpacity 
+                    key={song.id || index} 
+                    style={rectangleStyle}
+                    onPress={() => handleSongSelection(song, index)}
+                  >
+                    <Text style={[
+                      styles.songText,
+                      selectedSong?.id === song.id && styles.songTextSelected
+                    ]}>
                       {`${index + 1}. ${song.title?.toUpperCase() || 'CANCIÓN'}`}
                     </Text>
-                  </View>
+                    {selectedSong?.id === song.id && (
+                      <Text style={styles.selectedIndicator}>✓</Text>
+                    )}
+                  </TouchableOpacity>
                 );
               })}
             </View>
           </View>
         </View>
+
+        {/* Controles de Reproducción */}
+        {selectedSong && (
+          <View style={styles.playbackControls}>
+            <View style={styles.songInfo}>
+              <Text style={styles.currentSongTitle}>{selectedSong.title?.toUpperCase() || 'CANCIÓN SELECCIONADA'}</Text>
+              <Text style={styles.currentSongDetails}>
+                {selectedSong.bpm ? `${selectedSong.bpm} BPM` : ''} {selectedSong.key ? `• ${selectedSong.key}` : ''}
+              </Text>
+            </View>
+            
+            <View style={styles.controlButtons}>
+              <TouchableOpacity 
+                style={styles.controlButton}
+                onPress={handlePreviousSong}
+              >
+                <Text style={styles.controlButtonText}>⏮</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.controlButton, styles.playButton]}
+                onPress={handlePlayPause}
+              >
+                <Text style={styles.controlButtonText}>
+                  {isPlaying ? '⏸' : '▶'}
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.controlButton}
+                onPress={handleStop}
+              >
+                <Text style={styles.controlButtonText}>⏹</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.controlButton}
+                onPress={handleNextSong}
+              >
+                <Text style={styles.controlButtonText}>⏭</Text>
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.timeInfo}>
+              <Text style={styles.timeText}>{currentTime}</Text>
+              <Text style={styles.timeText}>/</Text>
+              <Text style={styles.timeText}>{totalTime}</Text>
+            </View>
+          </View>
+        )}
         
         <View style={styles.leftButtons}>
           <TouchableOpacity style={styles.leftButton}>
@@ -4250,6 +4359,95 @@ const styles = StyleSheet.create({
   setlistSelectorDeleteButtonText: {
     color: '#fff',
     fontSize: 12,
+    fontWeight: 'bold',
+  },
+  // Estilos para selección de canciones
+  songRectangleSelected: {
+    backgroundColor: '#2196F3',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  songTextSelected: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  selectedIndicator: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    position: 'absolute',
+    right: 10,
+  },
+  // Estilos para controles de reproducción
+  playbackControls: {
+    backgroundColor: '#2a2a2a',
+    padding: 20,
+    margin: 10,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#333',
+    shadowColor: '#000',
+    shadowOffset: { width: 4, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  songInfo: {
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  currentSongTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 5,
+  },
+  currentSongDetails: {
+    color: '#888',
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  controlButtons: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 15,
+    marginBottom: 15,
+  },
+  controlButton: {
+    backgroundColor: '#333',
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 2, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: '#555',
+  },
+  playButton: {
+    backgroundColor: '#4CAF50',
+    borderColor: '#66BB6A',
+  },
+  controlButtonText: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  timeInfo: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 5,
+  },
+  timeText: {
+    color: '#888',
+    fontSize: 14,
     fontWeight: 'bold',
   },
 });
