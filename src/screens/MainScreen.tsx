@@ -29,6 +29,7 @@ import SimpleOfflineService from '../services/simpleOfflineService';
 import LEDScreenUpload from '../components/LEDScreenUpload';
 import LEDDisplay from '../components/LEDDisplay';
 import AudioLibrary from '../components/AudioLibrary';
+import audioPlayerService from '../services/audioPlayerService';
 
 const { width, height } = Dimensions.get('window');
 
@@ -86,6 +87,25 @@ const MainScreen: React.FC = () => {
     setRealTimeLogs(prev => [...prev, logEntry]);
     console.log(logEntry);
   };
+
+  // Configurar servicio de audio
+  useEffect(() => {
+    // Configurar callback para actualizaciones de reproducción
+    audioPlayerService.setPlaybackUpdateCallback((currentTime, duration) => {
+      const minutes = Math.floor(currentTime / 60);
+      const seconds = Math.floor(currentTime % 60);
+      const totalMinutes = Math.floor(duration / 60);
+      const totalSeconds = Math.floor(duration % 60);
+      
+      setCurrentTime(`${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
+      setTotalTime(`${totalMinutes.toString().padStart(2, '0')}:${totalSeconds.toString().padStart(2, '0')}`);
+    });
+
+    // Cleanup al desmontar componente
+    return () => {
+      audioPlayerService.cleanup();
+    };
+  }, []);
 
   const handleUploadSong = async () => {
     try {
@@ -1579,48 +1599,77 @@ const MainScreen: React.FC = () => {
   };
 
   // Función para seleccionar una canción del setlist
-  const handleSongSelection = (song: any, index: number) => {
+  const handleSongSelection = async (song: any, index: number) => {
     console.log('🎵 Canción seleccionada:', song.title);
     setSelectedSong(song);
     setCurrentSongIndex(index);
-    setIsPlaying(false); // Resetear estado de reproducción
+    
+    // Detener reproducción actual
+    audioPlayerService.stop();
+    setIsPlaying(false);
+    
+    // Cargar la nueva canción
+    try {
+      await audioPlayerService.loadSong(song);
+      console.log('✅ Canción cargada exitosamente');
+    } catch (error) {
+      console.error('❌ Error cargando canción:', error);
+      Alert.alert('Error', 'No se pudo cargar la canción. Verifica que los archivos estén disponibles.');
+    }
   };
 
   // Función para manejar play/pause
-  const handlePlayPause = () => {
+  const handlePlayPause = async () => {
     if (!selectedSong) {
       Alert.alert('⚠️ Selecciona una canción', 'Primero selecciona una canción del setlist para reproducir');
       return;
     }
     
-    setIsPlaying(!isPlaying);
-    console.log(isPlaying ? '⏸️ Pausando reproducción' : '▶️ Iniciando reproducción');
+    try {
+      if (isPlaying) {
+        audioPlayerService.pause();
+        setIsPlaying(false);
+        console.log('⏸️ Pausando reproducción');
+      } else {
+        if (audioPlayerService.getIsPlaying()) {
+          audioPlayerService.resume();
+        } else {
+          await audioPlayerService.play();
+        }
+        setIsPlaying(true);
+        console.log('▶️ Iniciando reproducción');
+      }
+    } catch (error) {
+      console.error('❌ Error en reproducción:', error);
+      Alert.alert('Error', 'No se pudo reproducir la canción. Verifica que los archivos estén disponibles.');
+    }
   };
 
   // Función para detener reproducción
   const handleStop = () => {
+    audioPlayerService.stop();
     setIsPlaying(false);
     setCurrentTime('00:00');
     console.log('⏹️ Deteniendo reproducción');
   };
 
   // Función para siguiente canción
-  const handleNextSong = () => {
+  const handleNextSong = async () => {
     if (selectedSetlistSongs.length === 0) return;
     
     const nextIndex = (currentSongIndex + 1) % selectedSetlistSongs.length;
     const nextSong = selectedSetlistSongs[nextIndex];
-    handleSongSelection(nextSong, nextIndex);
+    await handleSongSelection(nextSong, nextIndex);
     console.log('⏭️ Siguiente canción:', nextSong.title);
   };
 
   // Función para canción anterior
-  const handlePreviousSong = () => {
+  const handlePreviousSong = async () => {
     if (selectedSetlistSongs.length === 0) return;
     
     const prevIndex = currentSongIndex === 0 ? selectedSetlistSongs.length - 1 : currentSongIndex - 1;
     const prevSong = selectedSetlistSongs[prevIndex];
-    handleSongSelection(prevSong, prevIndex);
+    await handleSongSelection(prevSong, prevIndex);
     console.log('⏮️ Canción anterior:', prevSong.title);
   };
 
