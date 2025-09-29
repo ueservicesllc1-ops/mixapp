@@ -1651,7 +1651,11 @@ const MainScreen: React.FC = () => {
         const currentSong = audioPlayerService.getCurrentSong();
         if (currentSong && currentSong.tracks) {
           console.log('🎵 Actualizando selectedSong con tracks procesados:', currentSong.tracks);
+          console.log('🎵 Tracks procesados con IDs:', currentSong.tracks.map(t => ({ id: t.id, name: t.name })));
           setSelectedSong(currentSong);
+          console.log('✅ selectedSong actualizado con tracks procesados');
+        } else {
+          console.log('❌ No se pudo obtener currentSong del audioPlayerService');
         }
       } else {
         console.log('⚠️ No se encontró la canción en multitracks, intentando cargar sin tracks');
@@ -1948,13 +1952,15 @@ const MainScreen: React.FC = () => {
       </View>
 
       {/* Track Sliders Section */}
-      {selectedSong && selectedSong.tracks && selectedSong.tracks.length > 0 && (
-        <View style={styles.trackSlidersSection}>
-          <Text style={styles.trackSlidersTitle}>TRACKS - {selectedSong.title}</Text>
-          <View style={styles.trackSlidersRow}>
-            {selectedSong.tracks.map((track: any, index: number) => (
-              <View key={`track-${track.id}-${index}`} style={styles.trackSlider}>
-                <Text style={styles.trackLabel}>{track.name}</Text>
+        {selectedSong && selectedSong.tracks && selectedSong.tracks.length > 0 && (
+          <View style={styles.trackSlidersSection}>
+            <Text style={styles.trackSlidersTitle}>TRACKS - {selectedSong.title}</Text>
+            <View style={styles.trackSlidersRow}>
+              {selectedSong.tracks.map((track: any, index: number) => (
+                <View key={`track-${track.id}-${index}`} style={styles.trackSlider}>
+                  <Text style={styles.trackLabel}>{track.name}</Text>
+                  <Text style={styles.trackIdLabel}>Firebase ID: {track.id || 'N/A'}</Text>
+                  <Text style={styles.trackIdLabel}>Downloads ID: {track.downloadsId || 'N/A'}</Text>
                 <TouchableOpacity 
                   style={styles.trackPlayButton}
                   onPress={() => {
@@ -4651,6 +4657,12 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 10,
     textAlign: 'center',
+  },
+  trackIdLabel: {
+    color: '#ff6b6b',
+    fontSize: 8,
+    textAlign: 'center',
+    marginBottom: 2,
   },
   trackPlayButton: {
     backgroundColor: '#4CAF50',

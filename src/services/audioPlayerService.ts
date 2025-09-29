@@ -37,18 +37,39 @@ class AudioPlayerService {
   async loadSong(song: Song): Promise<void> {
     console.log('🎵 Cargando canción:', song.title);
     console.log('🎵 ID de la canción:', song.id);
-    console.log('🎵 Datos completos de Firebase:', JSON.stringify(song, null, 2));
     
     // Limpiar sonidos anteriores
     this.clearSounds();
     this.currentSong = null;
     
-    // Buscar tracks en almacenamiento local del emulador
-    console.log('🔍 Buscando tracks en almacenamiento local...');
+    // Si la canción ya tiene tracks de Firebase, usarlos
+    if (song.tracks && song.tracks.length > 0) {
+      console.log('📚 Usando tracks de Firebase:', song.tracks.length);
+      console.log('🎵 Nombres de tracks:', song.tracks.map(t => t.name));
+      
+      // Buscar archivos específicos en Downloads usando los nombres de Firebase
+      const tracks = await this.findSpecificTracksInDownloads(song.tracks);
+      
+      if (tracks.length === 0) {
+        throw new Error('No se encontraron archivos de audio para los tracks en Downloads');
+      }
+      
+      this.currentSong = {
+        ...song,
+        tracks: tracks
+      };
+      
+      console.log('🎵 Canción cargada con tracks locales:', this.currentSong.title);
+      await this.loadTracks(tracks);
+      return;
+    }
+    
+    // Si no tiene tracks, buscar genéricamente
+    console.log('🔍 Buscando tracks genéricamente...');
     const tracks = await this.findTracksInDownloads(song);
     
     if (tracks.length === 0) {
-      throw new Error('No se encontraron tracks para esta canción en almacenamiento local');
+      throw new Error('No se encontraron tracks para esta canción');
     }
     
     this.currentSong = {
@@ -56,7 +77,7 @@ class AudioPlayerService {
       tracks: tracks
     };
     
-    console.log('🎵 Canción actualizada con tracks locales:', this.currentSong.title);
+    console.log('🎵 Canción cargada con tracks genéricos:', this.currentSong.title);
     await this.loadTracks(tracks);
   }
 
@@ -71,15 +92,17 @@ class AudioPlayerService {
         
         console.log(`🎵 Intentando cargar track ${track.name} desde:`, track.fileUrl);
         
-        const sound = new Sound(track.fileUrl, '', (error) => {
-          if (error) {
-            console.error(`❌ Error cargando track ${track.name}:`, error);
-            console.error(`❌ URL que falló:`, track.fileUrl);
-          } else {
-            console.log(`✅ Track ${track.name} cargado exitosamente`);
-            console.log(`🎵 Sound object creado para ${track.id}:`, !!sound);
-          }
-        });
+              // Para archivos .bin, intentar cargar como audio
+              const sound = new Sound(track.fileUrl, '', (error) => {
+                if (error) {
+                  console.error(`❌ Error cargando track ${track.name}:`, error);
+                  console.error(`❌ URL que falló:`, track.fileUrl);
+                  console.error(`❌ Tipo de archivo:`, track.fileUrl.split('.').pop());
+                } else {
+                  console.log(`✅ Track ${track.name} cargado exitosamente`);
+                  console.log(`🎵 Sound object creado para ${track.id}:`, !!sound);
+                }
+              });
         
         this.sounds.set(track.id, sound);
         console.log(`🎵 Sound agregado al Map con ID: ${track.id}`);
@@ -95,6 +118,98 @@ class AudioPlayerService {
     console.log('🎵 Keys en Map:', Array.from(this.sounds.keys()));
   }
 
+  // Buscar tracks específicos por nombre en Downloads
+  private async findSpecificTracksInDownloads(firebaseTracks: any[]): Promise<AudioTrack[]> {
+    const RNFS = require('react-native-fs');
+    
+    console.log('🔍 Buscando tracks específicos:', firebaseTracks.map(t => t.name));
+    
+    const downloadsPath = `${RNFS.ExternalStorageDirectoryPath}/Download`;
+    console.log('📁 Buscando en:', downloadsPath);
+    
+    const foundTracks: AudioTrack[] = [];
+    
+    // Buscar en todas las subcarpetas de Downloads
+    try {
+      const files = await RNFS.readDir(downloadsPath);
+      const subfolders = files.filter(file => file.isDirectory());
+      
+      console.log('📁 TODOS los archivos en Downloads:', files.map(f => ({ name: f.name, isFile: f.isFile(), isDirectory: f.isDirectory() })));
+      console.log('📁 Subcarpetas en Downloads:', subfolders.map(f => f.name));
+      
+      for (const subfolder of subfolders) {
+        console.log(`📁 Revisando subcarpeta: ${subfolder.name}`);
+        
+        try {
+          const subfolderFiles = await RNFS.readDir(subfolder.path);
+          console.log(`📁 Archivos en ${subfolder.name}:`, subfolderFiles.map(f => f.name));
+          
+          // Buscar cada track específico
+          for (let i = 0; i < firebaseTracks.length; i++) {
+            const firebaseTrack = firebaseTracks[i];
+            const trackName = firebaseTrack.name;
+            
+            console.log(`🔍 Buscando track: ${trackName}`);
+            
+            // Buscar archivo que coincida con el nombre del track
+            console.log(`🔍 Buscando archivo para track: "${trackName}"`);
+            console.log(`📁 Archivos disponibles:`, subfolderFiles.map(f => f.name));
+            
+            const matchingFile = subfolderFiles.find(file => {
+              if (!file.isFile()) return false;
+              
+              const fileName = file.name.toLowerCase();
+              const trackNameLower = trackName.toLowerCase();
+              
+              console.log(`🔍 Comparando: "${fileName}" con "${trackNameLower}"`);
+              
+              // Buscar coincidencias exactas o parciales
+              const matches = fileName.includes(trackNameLower) || 
+                     trackNameLower.includes(fileName.replace(/\.(wav|mp3|m4a)$/i, ''));
+              
+              console.log(`🔍 ¿Coincide? ${matches}`);
+              return matches;
+            });
+            
+            if (matchingFile && (matchingFile.name.endsWith('.wav') || matchingFile.name.endsWith('.mp3') || matchingFile.name.endsWith('.m4a') || matchingFile.name.endsWith('.bin'))) {
+              console.log(`✅ Encontrado: ${matchingFile.name} para track ${trackName}`);
+              console.log(`📁 Ruta completa: ${matchingFile.path}`);
+              
+              const audioTrack: AudioTrack = {
+                id: `track_${i}`,
+                name: trackName,
+                fileUrl: matchingFile.path,
+                localPath: matchingFile.path,
+                volume: 50,
+                muted: false,
+                downloadsId: matchingFile.name // Agregar ID de Downloads
+              };
+              
+              foundTracks.push(audioTrack);
+            } else {
+              console.log(`❌ No encontrado: ${trackName}`);
+              console.log(`📁 Archivos disponibles:`, subfolderFiles.map(f => f.name));
+            }
+          }
+          
+          if (foundTracks.length > 0) {
+            console.log(`✅ Encontrados ${foundTracks.length} tracks en ${subfolder.name}`);
+            break; // Salir del loop si encontramos tracks
+          }
+          
+        } catch (subfolderError) {
+          console.log(`❌ Error leyendo subcarpeta ${subfolder.name}:`, subfolderError);
+        }
+      }
+      
+    } catch (error) {
+      console.error('❌ Error buscando tracks específicos:', error);
+    }
+    
+    console.log(`🎵 Tracks encontrados: ${foundTracks.length}`);
+    return foundTracks;
+  }
+
   // Buscar tracks en la ruta de Downloads
   private async findTracksInDownloads(song: Song): Promise<AudioTrack[]> {
     const RNFS = require('react-native-fs');
@@ -106,6 +221,14 @@ class AudioPlayerService {
     // Buscar en la carpeta principal de Downloads
     const downloadsPath = `${RNFS.ExternalStorageDirectoryPath}/Download`;
     console.log('📁 Buscando en:', downloadsPath);
+    
+    // Definir rutas posibles para buscar
+    const possiblePaths = [
+      downloadsPath,
+      `${downloadsPath}/MixerCurseDownloads`,
+      `${downloadsPath}/multitracks`,
+      `${RNFS.ExternalStorageDirectoryPath}/Download/MixerCurseDownloads`
+    ];
     
     // Buscar en cada ruta posible
     for (let i = 0; i < possiblePaths.length; i++) {
@@ -128,6 +251,8 @@ class AudioPlayerService {
           file.isFile() && 
           (file.name.endsWith('.wav') || file.name.endsWith('.mp3') || file.name.endsWith('.m4a'))
         );
+        
+        console.log(`🎵 Archivos de audio encontrados en ruta ${i + 1}:`, audioFiles.map(f => f.name));
         
         if (audioFiles.length > 0) {
           console.log(`🎵 Encontrados ${audioFiles.length} archivos de audio en ruta ${i + 1}`);
